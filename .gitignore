@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+.cache
+.DS_Store
+.env
+.env.*.local
+!.env.example
+cli/target
+*.log
