@@ -9,11 +9,11 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
  * Left sidebar.
  *
  * Top: workspace switcher (canonical slug from server). Middle: requests.
- * Bottom: user.
+ * Bottom: user. Sign-in lives on the standalone `/login` page.
  */
 export function Sidebar() {
-  const { workspace } = useWorkspace();
-  const slug = workspace?.workspace ?? null;
+  const { merged } = useWorkspace();
+  const slug = merged?.workspace ?? null;
   const workspaces = slug ? [{ slug }] : [];
 
   return (

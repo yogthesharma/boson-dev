@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
+use crate::commands::credentials;
 use crate::schema;
 
 const DEFAULT_SERVER: &str = "http://localhost:3001";
@@ -44,11 +45,11 @@ pub fn run(file: &Path, server: Option<&str>, dry_run: bool) -> Result<()> {
     let url = format!("{}/v1/canonical", server.trim_end_matches('/'));
 
     let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .with_context(|| format!("POST {url}"))?;
+    let mut req = client.post(&url).json(&payload);
+    if let Some(token) = credentials::load_token() {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
+    let resp = req.send().with_context(|| format!("POST {url}"))?;
 
     let status = resp.status();
     let body: PushResponse = resp
@@ -68,6 +69,11 @@ pub fn run(file: &Path, server: Option<&str>, dry_run: bool) -> Result<()> {
             Ok(())
         }
         PushResponse::Err { error, path } => {
+            if status == 401 {
+                bail!(
+                    "server returned 401 (unauthorized). Run `boson login --email … --password …` or set BOSON_AUTH_DISABLED=1 on the server for local dev. Details: {error}"
+                );
+            }
             if let Some(p) = path {
                 bail!("server rejected payload at {p}: {error}");
             }

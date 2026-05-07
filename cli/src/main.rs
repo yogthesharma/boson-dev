@@ -37,6 +37,34 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Save an API token to ~/.config/boson/auth.json (from email/password login).
+    Login {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        password: String,
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Create an account and save the JWT to ~/.config/boson/auth.json.
+    Register {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        password: String,
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Watch boson.yml and sync a per-user draft to the server (`POST /v1/drafts`).
+    Dev {
+        #[arg(short, long, default_value = "boson.yml")]
+        file: PathBuf,
+        #[arg(long)]
+        server: Option<String>,
+        /// Call `DELETE /v1/drafts` and exit (no file watch).
+        #[arg(long)]
+        reset: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -48,5 +76,20 @@ fn main() -> Result<()> {
             server,
             dry_run,
         } => commands::push::run(&file, server.as_deref(), dry_run),
+        Command::Login {
+            email,
+            password,
+            server,
+        } => commands::login::run(&email, &password, server.as_deref()),
+        Command::Register {
+            email,
+            password,
+            server,
+        } => commands::register::run(&email, &password, server.as_deref()),
+        Command::Dev {
+            file,
+            server,
+            reset,
+        } => commands::dev::run(&file, server.as_deref(), reset),
     }
 }

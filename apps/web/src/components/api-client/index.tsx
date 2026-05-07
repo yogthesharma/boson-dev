@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useAuth } from "@/context/auth-context";
 import { useWorkspace } from "@/context/workspace-context";
 import { interpolate } from "@/lib/environments";
 import {
@@ -29,7 +30,16 @@ import {
   saveUrlEncode,
 } from "@/lib/request-preferences";
 
+import {
+  deleteOverrideField,
+  deleteRequestOverride,
+  patchRequestOverride,
+  patchUserRequest,
+  deleteUserRequest,
+} from "@/lib/workspace-api";
+
 import { snapshotFromCanonical } from "./apply-canonical";
+import { buildOverridePatch } from "./override-helpers";
 import { RequestPane } from "./request-pane";
 import { ResponsePane } from "./response-pane";
 import { useProxyRequest } from "./use-proxy-request";
@@ -39,7 +49,11 @@ import {
 } from "./use-request-history";
 
 export function ApiClient() {
-  const { activeEnv, selectedRequest, loadState } = useWorkspace();
+  const { activeEnv, selectedRequest, loadState, refreshWorkspace } =
+    useWorkspace();
+  const { authHeaders } = useAuth();
+
+  const [syncBusy, setSyncBusy] = useState(false);
 
   const [method, setMethod] = useState<HttpMethod>("GET");
   const [url, setUrl] = useState("");
@@ -72,10 +86,8 @@ export function ApiClient() {
   }, [maxRedirects]);
 
   /**
-   * When the selected canonical request changes, snapshot it into local UI
-   * state. Anything the user typed into the previous request is dropped —
-   * canonical wins on switch. Once Slice C lands we'll layer the user's
-   * override on top instead of replacing.
+   * When the selected request changes, snapshot merged server state into the
+   * local editor (draft / overrides already applied in the payload).
    */
   useEffect(() => {
     if (!selectedRequest) return;
@@ -171,6 +183,69 @@ export function ApiClient() {
     setUrl(entry.url);
   }, []);
 
+  const handleSaveToServer = useCallback(async () => {
+    if (!selectedRequest) return;
+    const patch = buildOverridePatch(
+      selectedRequest,
+      method,
+      url,
+      headers,
+      bodyMode,
+      rawBody,
+      formBody,
+    );
+    if (!patch) return;
+    setSyncBusy(true);
+    try {
+      if (selectedRequest.source === "user") {
+        await patchUserRequest(selectedRequest.id, patch, authHeaders);
+      } else {
+        await patchRequestOverride(selectedRequest.id, patch, authHeaders);
+      }
+      await refreshWorkspace();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [
+    authHeaders,
+    bodyMode,
+    formBody,
+    headers,
+    method,
+    rawBody,
+    refreshWorkspace,
+    selectedRequest,
+    url,
+  ]);
+
+  const handleResetOverrides = useCallback(async () => {
+    if (!selectedRequest || selectedRequest.source === "user") return;
+    setSyncBusy(true);
+    try {
+      await deleteRequestOverride(selectedRequest.id, authHeaders);
+      await refreshWorkspace();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [authHeaders, refreshWorkspace, selectedRequest]);
+
+  const handleDeleteUserRequest = useCallback(async () => {
+    if (!selectedRequest || selectedRequest.source !== "user") return;
+    setSyncBusy(true);
+    try {
+      await deleteUserRequest(selectedRequest.id, authHeaders);
+      await refreshWorkspace();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [authHeaders, refreshWorkspace, selectedRequest]);
+
   if (loadState === "loading") {
     return <EmptyState title="Loading workspace…" />;
   }
@@ -187,6 +262,62 @@ export function ApiClient() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="border-border flex flex-wrap items-center gap-2 border-b px-4 py-2">
+        <button
+          type="button"
+          disabled={syncBusy}
+          onClick={() => handleSaveToServer()}
+          className="bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50"
+        >
+          {syncBusy ? "Saving…" : "Save to server"}
+        </button>
+        {selectedRequest.source !== "user" &&
+        selectedRequest.overridden_fields.length > 0 ? (
+          <button
+            type="button"
+            disabled={syncBusy}
+            onClick={() => handleResetOverrides()}
+            className="text-muted-foreground hover:text-foreground rounded-md px-2 py-1 text-xs disabled:opacity-50"
+          >
+            Reset overrides
+          </button>
+        ) : null}
+        {selectedRequest.source !== "user" &&
+        selectedRequest.overridden_fields.includes("url") ? (
+          <button
+            type="button"
+            disabled={syncBusy}
+            onClick={async () => {
+              setSyncBusy(true);
+              try {
+                await deleteOverrideField(
+                  selectedRequest.id,
+                  "url",
+                  authHeaders,
+                );
+                await refreshWorkspace();
+              } catch (e) {
+                console.error(e);
+              } finally {
+                setSyncBusy(false);
+              }
+            }}
+            className="text-muted-foreground hover:text-foreground rounded-md px-2 py-1 text-xs disabled:opacity-50"
+          >
+            Revert URL
+          </button>
+        ) : null}
+        {selectedRequest.source === "user" ? (
+          <button
+            type="button"
+            disabled={syncBusy}
+            onClick={() => handleDeleteUserRequest()}
+            className="text-rose-500 hover:text-rose-400 ml-auto rounded-md px-2 py-1 text-xs disabled:opacity-50"
+          >
+            Delete request
+          </button>
+        ) : null}
+      </div>
       <ResizablePanelGroup
         orientation="vertical"
         id="api-client"

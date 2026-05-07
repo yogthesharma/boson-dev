@@ -49,25 +49,27 @@ Tick when an answer is committed. Recommendation in **bold**.
 
 - [x] **D1.** `boson push` reads YAML on disk → posts to server. **(recommended)**
       Alternative: promotes the user's draft slot to canonical.
-- [ ] **D2.** UI shows a small `DRAFT` badge on draft-sourced requests + a
-      "compare with canonical" toggle. **(recommended yes)** _(needed in
-      Slice E)_
-- [ ] **D3.** Draft lifetime: **persists until next push or `boson dev --reset`**.
+- [x] **D2.** UI shows a small `DRAFT` badge on draft-sourced requests + a
+      "compare with canonical" toggle. **(recommended yes)** — badge shipped;
+      compare toggle deferred (optional follow-up).
+- [x] **D3.** Draft lifetime: **persists until next push or `boson dev --reset`**.
       Alternative: dies on `boson dev` Ctrl-C. _(needed in Slice E)_
-- [ ] **D4.** Override vs draft conflict: **override wins, UI shows
+- [x] **D4.** Override vs draft conflict: **override wins, UI shows
       "draft updated this field" hint**. Alternative: silent override-wins.
-      _(needed in Slice E)_
-- [ ] **D5.** Multi-machine: **last-writer-wins per (user, workspace)**.
+      _(Merge order implemented; per-field hint deferred.)_
+- [x] **D5.** Multi-machine: **last-writer-wins per (user, workspace)**.
       Alternative: per-machine slots keyed by `machine_id`. _(needed in
       Slice E)_
 - [x] **D6.** Wire format: **whole parsed YAML payload**. Content-hash
       short-circuit deferred to Slice E (drafts) where it actually matters.
-- [ ] **D7.** Auth: pick one for v1 — GitHub OAuth, email magic-link, or
-      simple API token. _(needed in Slice B; v1 = no auth, single workspace.)_
+- [x] **D7.** Auth: pick one for v1 — GitHub OAuth, email magic-link, or
+      simple API token. **Shipped:** email + password `POST /v1/auth/register`
+      / `POST /v1/auth/login`, HS256 JWT in `Authorization: Bearer`, optional
+      `BOSON_AUTH_DISABLED=1` for local dev (acts as bootstrap user id `1`).
 - [x] **D8.** Minimal YAML schema locked (see §5).
 - [x] **D9.** Stable canonical request identity: **explicit `id:` field
       required in YAML**. Renames keep overrides attached.
-- [ ] **D10.** Override granularity: **per-field patch** (per-field reverts
+- [x] **D10.** Override granularity: **per-field patch** (per-field reverts
       possible). Alternative: whole-request snapshot. _(needed in Slice C)_
 - [x] **D11.** "Promote override to YAML" flow (e.g. `boson pull`):
       **out of scope for v1.**
@@ -89,8 +91,8 @@ Unblocks every other slice.
 - [x] Server:
   - [x] `POST /v1/canonical` — replace canonical for a workspace
         (transactional: clear & insert all rows).
-  - [x] `GET /v1/workspace` — return canonical only (no auth yet, single
-        workspace).
+  - [x] `GET /v1/workspace` — merged per-user view after Slice B–E (override \>
+        draft \> canonical + `userRequests`; see `buildMergedWorkspaceView`).
   - [x] Boot-time migrations runner (`apps/server/src/db/migrate.ts`).
 - [x] CLI:
   - [x] `boson push` parses local YAML against the schema and POSTs.
@@ -101,52 +103,55 @@ Unblocks every other slice.
   - [x] Sidebar: list canonical requests; click → load into request bar.
   - [x] Read-only behavior on canonical (overrides come in Slice C).
 
-### Slice B — Auth
+### Slice B — Auth ✅
 
-- [ ] Implement D7.
-- [ ] DB: `user`, `session` (or token) tables.
-- [ ] All endpoints behind auth.
-- [ ] CLI: `boson login` writes token to `~/.config/boson/auth.json`;
-      `boson push` sends `Authorization: Bearer …`.
-- [ ] Web: login screen + session; client adds credentials to fetches.
+- [x] Implement D7.
+- [x] DB: `app_user` (JWT auth; no separate session table — stateless HS256).
+- [x] `/v1/*` routes require `Authorization: Bearer` except `POST /v1/auth/login`
+      and `POST /v1/auth/register`. Health + proxy stay public. Optional
+      `BOSON_AUTH_DISABLED=1` uses bootstrap user id `1`.
+- [x] CLI: `boson login` / `boson register` write `~/.config/boson/auth.json`;
+      `boson push` sends `Authorization: Bearer …` when a token is stored.
+- [x] Web: sidebar sign-in + bearer on `GET /v1/workspace` and mutations.
 
-### Slice C — Overrides
+### Slice C — Overrides ✅
 
-- [ ] DB: `request_override` (user_id, workspace_id, request_id, patch_json).
-- [ ] Server:
-  - [ ] `PATCH /v1/requests/:id/override`
-  - [ ] `DELETE /v1/requests/:id/override` (full reset)
-  - [ ] `DELETE /v1/requests/:id/override/:field` (per-field reset)
-- [ ] `GET /v1/workspace` returns merged result + `overridden_fields[]`.
-- [ ] Web:
-  - [ ] Per-field revert affordances (small icon on overridden inputs).
-  - [ ] Global "Reset to canonical" button on the request.
-  - [ ] Subtle "modified" indicator next to the request in the sidebar.
+- [x] DB: `request_override` (user_id, workspace_id, request_id, patch JSONB).
+- [x] Server:
+  - [x] `PATCH /v1/requests/:id/override`
+  - [x] `DELETE /v1/requests/:id/override` (full reset)
+  - [x] `DELETE /v1/requests/:id/override/:field` (per-field reset; fields:
+        `method`, `name`, `url`, `headers`, `body`)
+- [x] `GET /v1/workspace` returns merged result + `overridden_fields[]` (top-level keys).
+- [x] Web:
+  - [x] Per-field revert: "Revert URL" when URL is overridden (more fields can follow the same pattern).
+  - [x] Global "Reset overrides" for the selected canonical/draft-backed request.
+  - [x] Amber dot in sidebar when a request has overrides.
 
-### Slice D — User-only requests
+### Slice D — User-only requests ✅
 
-- [ ] DB: `request_user` (id, user_id, workspace_id, payload).
-- [ ] Server: `POST/PATCH/DELETE /v1/user-requests`.
-- [ ] Web:
-  - [ ] "+ New Request" CTA in sidebar.
-  - [ ] Personal section / badge to distinguish from canonical.
-  - [ ] Delete (no reset, since there's no canonical baseline).
+- [x] DB: `request_user` (text id, user_id, workspace_id, name, method, url, headers, body, sort_index).
+- [x] Server: `POST/PATCH/DELETE /v1/user-requests`.
+- [x] Web:
+  - [x] "+ New Request" CTA in sidebar (next to Requests heading).
+  - [x] "Personal" section + `You` badge for user-only rows.
+  - [x] Delete via "Delete request" in the request toolbar.
 
-### Slice E — Drafts (`boson dev`)
+### Slice E — Drafts (`boson dev`) ✅
 
-- [ ] DB: `request_draft` (user_id, workspace_id, payload, content_hash, updated_at).
-- [ ] Server:
-  - [ ] `POST /v1/drafts` — accepts whole YAML payload + hash; short-circuit
+- [x] DB: `request_draft` (user_id, workspace_id, payload, content_hash, updated_at).
+- [x] Server:
+  - [x] `POST /v1/drafts` — accepts whole YAML payload + hash; short-circuit
         on unchanged hash.
-  - [ ] `DELETE /v1/drafts` — graceful shutdown / `boson dev --reset`.
-- [ ] CLI: `boson dev`
-  - [ ] `notify`-based watcher on the YAML directory.
-  - [ ] On change: parse → validate → POST.
-  - [ ] On Ctrl-C / `--reset` → DELETE.
-- [ ] `GET /v1/workspace` precedence becomes override > draft > canonical.
-- [ ] Web:
-  - [ ] `DRAFT` badge on draft-sourced requests (D2).
-  - [ ] Optional "compare with canonical" toggle.
+  - [x] `DELETE /v1/drafts` — `boson dev --reset` / Ctrl-C handler.
+- [x] CLI: `boson dev`
+  - [x] `notify`-based watcher on the YAML file (parent directory watched).
+  - [x] On change: parse → validate → POST.
+  - [x] On Ctrl-C / `--reset` → DELETE.
+- [x] `GET /v1/workspace` precedence: override > draft > canonical.
+- [x] Web:
+  - [x] `Draft` badge on draft-sourced requests (D2).
+  - [ ] Optional "compare with canonical" toggle (deferred).
 
 ### Slice F — Polish
 
@@ -233,3 +238,8 @@ Still-open schema questions (non-blocking, deferred):
 - 2026-05-07 — Slice A landed end-to-end. CLI `boson push` + `boson init`,
   server `POST /v1/canonical` / `GET /v1/workspace`, web sidebar driven by
   the canonical workspace. Sample `boson.yml` at repo root.
+- 2026-05-07 — Slices **B–E** landed: JWT auth (`app_user`, `/v1/auth/*`),
+  protected `/v1/*`, merged `GET /v1/workspace` (override \> draft \> canonical),
+  `request_override` + `request_user` + `request_draft`, CLI `boson login` /
+  `boson register` / `boson dev`, web sign-in + override toolbar + personal
+  requests + draft badge. Slice **F** (polish) still open.

@@ -8,17 +8,19 @@ import {
   type ReactNode,
 } from "react";
 
+import { useAuth } from "@/context/auth-context";
 import { getHealth } from "@/lib/api";
 import {
   getStoredEnvironmentName,
   pickInitialEnvironment,
   saveEnvironmentName,
 } from "@/lib/environments";
-import {
-  getWorkspace,
-  type CanonicalRequest,
-  type Environment,
-  type WorkspacePayload,
+import { navigate } from "@/lib/router";
+import { getWorkspaceMerged } from "@/lib/workspace-api";
+import type {
+  Environment,
+  MergedRequest,
+  MergedWorkspaceView,
 } from "@/lib/workspace";
 
 type LoadState = "loading" | "ready" | "error";
@@ -26,16 +28,19 @@ type LoadState = "loading" | "ready" | "error";
 type WorkspaceValue = {
   loadState: LoadState;
   loadError: string | null;
-  workspace: WorkspacePayload | null;
+  /** Full merged view from `GET /v1/workspace` (canonical + draft + overrides). */
+  merged: MergedWorkspaceView | null;
+  needsLogin: boolean;
 
   environments: Environment[];
   activeEnv: Environment | null;
   setActiveEnv: (env: Environment) => void;
 
-  requests: CanonicalRequest[];
+  requests: MergedRequest[];
+  userRequests: MergedRequest[];
   selectedRequestId: string | null;
   selectRequest: (id: string | null) => void;
-  selectedRequest: CanonicalRequest | null;
+  selectedRequest: MergedRequest | null;
 
   /** null = still checking */
   serverOk: boolean | null;
@@ -53,9 +58,11 @@ const FALLBACK_ENV: Environment = {
 };
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [workspace, setWorkspace] = useState<WorkspacePayload | null>(null);
+  const { authHeaders, logout } = useAuth();
+  const [merged, setMerged] = useState<MergedWorkspaceView | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   const [activeEnv, setActiveEnvState] = useState<Environment | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
@@ -66,9 +73,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const refreshWorkspace = useCallback(async () => {
     setLoadState("loading");
     setLoadError(null);
+    setNeedsLogin(false);
     try {
-      const ws = await getWorkspace();
-      setWorkspace(ws);
+      const ws = await getWorkspaceMerged(authHeaders);
+      setMerged(ws);
       const envs = ws?.environments ?? [];
       const next = pickInitialEnvironment(envs, getStoredEnvironmentName());
       setActiveEnvState((prev) => {
@@ -76,17 +84,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (next) saveEnvironmentName(next.name);
         return next;
       });
+      const allReqs = [...(ws?.requests ?? []), ...(ws?.userRequests ?? [])];
       setSelectedRequestId((prev) => {
-        const reqs = ws?.requests ?? [];
-        if (prev && reqs.find((r) => r.id === prev)) return prev;
-        return reqs[0]?.id ?? null;
+        if (prev && allReqs.find((r) => r.id === prev)) return prev;
+        return ws?.requests[0]?.id ?? ws?.userRequests[0]?.id ?? null;
       });
       setLoadState("ready");
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      const status = (err as { status?: number }).status;
+      if (status === 401) {
+        logout();
+        setNeedsLogin(true);
+        setLoadError("Sign in to load this workspace.");
+        navigate("/login", { replace: true });
+      } else {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      }
       setLoadState("error");
     }
-  }, []);
+  }, [authHeaders, logout]);
 
   const setActiveEnv = useCallback((env: Environment) => {
     setActiveEnvState(env);
@@ -117,18 +133,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [refreshHealth]);
 
   const value = useMemo<WorkspaceValue>(() => {
-    const requests = workspace?.requests ?? [];
-    const environments = workspace?.environments ?? [];
+    const requests = merged?.requests ?? [];
+    const userRequests = merged?.userRequests ?? [];
+    const environments = merged?.environments ?? [];
     const selectedRequest =
-      requests.find((r) => r.id === selectedRequestId) ?? null;
+      requests.find((r) => r.id === selectedRequestId) ??
+      userRequests.find((r) => r.id === selectedRequestId) ??
+      null;
     return {
       loadState,
       loadError,
-      workspace,
+      merged,
+      needsLogin,
       environments,
       activeEnv: activeEnv ?? (environments[0] ?? FALLBACK_ENV),
       setActiveEnv,
       requests,
+      userRequests,
       selectedRequestId,
       selectRequest,
       selectedRequest,
@@ -140,19 +161,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     activeEnv,
     loadError,
     loadState,
+    merged,
+    needsLogin,
     refreshHealth,
     refreshWorkspace,
     selectRequest,
     selectedRequestId,
     serverOk,
     setActiveEnv,
-    workspace,
   ]);
 
   return (
-    <WorkspaceContext.Provider value={value}>
-      {children}
-    </WorkspaceContext.Provider>
+    <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
   );
 }
 

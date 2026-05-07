@@ -28,9 +28,9 @@ export async function mergeOverridePatch(
   const merged = { ...prev, ...partial };
   await sql`
     INSERT INTO request_override (user_id, workspace_id, request_id, patch)
-    VALUES (${userId}, ${workspaceId}, ${requestId}, ${sql.json(merged)})
+    VALUES (${userId}, ${workspaceId}, ${requestId}, ${sql.json(merged as never)})
     ON CONFLICT (user_id, workspace_id, request_id)
-    DO UPDATE SET patch = ${sql.json(merged)}, updated_at = NOW()
+    DO UPDATE SET patch = ${sql.json(merged as never)}, updated_at = NOW()
   `;
 }
 
@@ -63,8 +63,8 @@ export async function deleteOverrideField(
   }
   await sql`
     INSERT INTO request_override (user_id, workspace_id, request_id, patch)
-    VALUES (${userId}, ${workspaceId}, ${requestId}, ${sql.json(rest)})
+    VALUES (${userId}, ${workspaceId}, ${requestId}, ${sql.json(rest as never)})
     ON CONFLICT (user_id, workspace_id, request_id)
-    DO UPDATE SET patch = ${sql.json(rest)}, updated_at = NOW()
+    DO UPDATE SET patch = ${sql.json(rest as never)}, updated_at = NOW()
   `;
 }

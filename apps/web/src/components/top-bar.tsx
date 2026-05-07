@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Globe2, Plus } from "lucide-react";
+import { ChevronsUpDown, Globe2, LogIn, LogOut, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,20 +9,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/context/auth-context";
 import { useWorkspace } from "@/context/workspace-context";
+import { navigate } from "@/lib/router";
 import { cn } from "@/lib/utils";
 
 export function TopBar() {
   const {
-    workspace,
+    merged,
     environments,
     activeEnv,
     setActiveEnv,
     serverOk,
     selectedRequest,
   } = useWorkspace();
+  const { token, logout } = useAuth();
 
-  const workspaceLabel = workspace?.workspace ?? "Boson";
+  const workspaceLabel = merged?.workspace ?? "Boson";
 
   return (
     <header className="bg-background/80 flex h-12 shrink-0 items-center gap-3 px-5 backdrop-blur">
@@ -42,6 +45,31 @@ export function TopBar() {
 
       <div className="flex items-center gap-2">
         <ServerDot ok={serverOk} />
+
+        {token ? (
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/login", { replace: true });
+            }}
+            className="text-muted-foreground hover:text-foreground hover:bg-accent hidden h-8 items-center gap-1 rounded-md border px-2 text-xs sm:inline-flex"
+            title="Sign out"
+          >
+            <LogOut className="size-3.5" />
+            Sign out
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="text-muted-foreground hover:text-foreground hover:bg-accent hidden h-8 items-center gap-1 rounded-md border px-2 text-xs sm:inline-flex"
+            title="Sign in"
+          >
+            <LogIn className="size-3.5" />
+            Sign in
+          </button>
+        )}
 
         {environments.length > 0 && activeEnv ? (
           <DropdownMenu>

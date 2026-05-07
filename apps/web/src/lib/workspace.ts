@@ -1,9 +1,8 @@
 /**
- * Workspace data fetched from the server.
- * Mirrors `WorkspacePayload` in `apps/server/src/lib/canonical.ts`. Keep them
- * in sync — the doc in `docs/sync-and-overrides.md` is the source of truth.
+ * Workspace data from the server.
+ * Mirrors merged types on the server (`merge-workspace.ts`). See
+ * `docs/sync-and-overrides.md`.
  */
-import { apiPrefix } from "./api";
 
 export const HTTP_METHODS = [
   "GET",
@@ -39,24 +38,20 @@ export type Environment = {
   vars: Record<string, string>;
 };
 
-export type WorkspacePayload = {
+export type RequestSource = "canonical" | "draft" | "user";
+
+export type MergedRequest = CanonicalRequest & {
+  source: RequestSource;
+  overridden_fields: string[];
+  draft_fields: string[];
+};
+
+export type MergedWorkspaceView = {
   workspace: string;
   environments: Environment[];
-  requests: CanonicalRequest[];
+  requests: MergedRequest[];
+  userRequests: MergedRequest[];
 };
 
-type WorkspaceResponse = {
-  ok: boolean;
-  workspace: WorkspacePayload | null;
-};
-
-export async function getWorkspace(
-  signal?: AbortSignal,
-): Promise<WorkspacePayload | null> {
-  const res = await fetch(`${apiPrefix}/v1/workspace`, { signal });
-  if (!res.ok) {
-    throw new Error(`GET /v1/workspace failed: ${res.status}`);
-  }
-  const data = (await res.json()) as WorkspaceResponse;
-  return data.workspace ?? null;
-}
+/** @deprecated Prefer `MergedWorkspaceView`; kept for older imports. */
+export type WorkspacePayload = MergedWorkspaceView;
