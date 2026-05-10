@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchHistory, fetchProject } from "@/lib/api";
+import { fetchHistory, fetchProject, fetchVersion } from "@/lib/api";
+import type { VersionInfo } from "@/lib/api";
 import { errorMessage } from "@/lib/format";
 import type { HistoryItem, ProjectView } from "@/types";
 
 export interface UseProjectResult {
   project: ProjectView | null;
   history: HistoryItem[];
+  version: VersionInfo | null;
   loading: boolean;
   bootstrapError: string | null;
   selectedRequestId: string;
@@ -19,6 +21,7 @@ export interface UseProjectResult {
 export function useProject(): UseProjectResult {
   const [project, setProject] = useState<ProjectView | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [version, setVersion] = useState<VersionInfo | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -46,9 +49,26 @@ export function useProject(): UseProjectResult {
       .finally(() => setLoading(false));
   }, [refresh]);
 
+  // Version is immutable for the lifetime of the running server, so fetch it
+  // once at mount and never refetch on `refresh()`.
+  useEffect(() => {
+    let cancelled = false;
+    fetchVersion()
+      .then((info) => {
+        if (!cancelled) setVersion(info);
+      })
+      .catch(() => {
+        /* version is decorative — silently swallow failures */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return {
     project,
     history,
+    version,
     loading,
     bootstrapError,
     selectedRequestId,

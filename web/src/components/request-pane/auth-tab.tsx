@@ -1,3 +1,4 @@
+import { VariableInput } from "@/components/variable-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -8,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AuthForm, AuthKind } from "@/lib/request-form";
+import type { ProjectVariables } from "@/lib/variables";
 
 const AUTH_OPTIONS: { value: AuthKind; label: string; hint: string }[] = [
   { value: "none", label: "No auth", hint: "no Authorization header is added" },
@@ -20,9 +22,11 @@ const AUTH_OPTIONS: { value: AuthKind; label: string; hint: string }[] = [
 export function AuthTab({
   auth,
   onChange,
+  variables,
 }: {
   auth: AuthForm;
   onChange: (auth: AuthForm) => void;
+  variables: ProjectVariables;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -55,17 +59,16 @@ export function AuthTab({
       </div>
 
       {auth.kind === "bearer" ? (
-        <Field label="Token" hint="Use {{secret:NAME}} for encrypted vars.">
-          <Input
+        <Field label="Token" hint="Type {{ to pull from env or secrets.">
+          <VariableInput
             value={auth.bearer.token}
-            onChange={(event) =>
-              onChange({
-                ...auth,
-                bearer: { token: event.target.value },
-              })
+            onChange={(token) =>
+              onChange({ ...auth, bearer: { token } })
             }
+            variables={variables}
             placeholder="{{secret:DEMO_TOKEN}}"
             className="h-9 font-mono text-sm"
+            showResolvedHint
           />
         </Field>
       ) : null}
@@ -73,27 +76,23 @@ export function AuthTab({
       {auth.kind === "basic" ? (
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Username">
-            <Input
+            <VariableInput
               value={auth.basic.username}
-              onChange={(event) =>
-                onChange({
-                  ...auth,
-                  basic: { ...auth.basic, username: event.target.value },
-                })
+              onChange={(username) =>
+                onChange({ ...auth, basic: { ...auth.basic, username } })
               }
+              variables={variables}
               placeholder="user"
               className="h-9 font-mono text-sm"
             />
           </Field>
           <Field label="Password">
-            <Input
+            <VariableInput
               value={auth.basic.password}
-              onChange={(event) =>
-                onChange({
-                  ...auth,
-                  basic: { ...auth.basic, password: event.target.value },
-                })
+              onChange={(password) =>
+                onChange({ ...auth, basic: { ...auth.basic, password } })
               }
+              variables={variables}
               placeholder="{{secret:PASSWORD}}"
               type="password"
               className="h-9 font-mono text-sm"
@@ -118,14 +117,15 @@ export function AuthTab({
             />
           </Field>
           <Field label="Value">
-            <Input
+            <VariableInput
               value={auth.apiKey.value}
-              onChange={(event) =>
+              onChange={(value) =>
                 onChange({
                   ...auth,
-                  apiKey: { ...auth.apiKey, value: event.target.value },
+                  apiKey: { ...auth.apiKey, value },
                 })
               }
+              variables={variables}
               placeholder="{{secret:API_KEY}}"
               className="h-9 font-mono text-sm"
             />
@@ -157,14 +157,12 @@ export function AuthTab({
 
       {auth.kind === "oauth2" ? (
         <Field label="Access token" hint="OAuth flows are not yet automated.">
-          <Input
+          <VariableInput
             value={auth.oauth2.token}
-            onChange={(event) =>
-              onChange({
-                ...auth,
-                oauth2: { token: event.target.value },
-              })
+            onChange={(token) =>
+              onChange({ ...auth, oauth2: { token } })
             }
+            variables={variables}
             placeholder="{{secret:OAUTH_TOKEN}}"
             className="h-9 font-mono text-sm"
           />

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { FileTextIcon, PlusIcon, SparklesIcon, XIcon } from "lucide-react";
 
 import { KvEditor } from "@/components/kv-editor";
+import { VariableInput } from "@/components/variable-input";
 import {
   CodeEditor,
   languageFromContentType,
@@ -28,6 +29,7 @@ import type {
   KvRow,
   MultipartUiField,
 } from "@/lib/request-form";
+import type { ProjectVariables } from "@/lib/variables";
 
 const BODY_OPTIONS: { value: BodyKind; label: string; hint: string }[] = [
   { value: "none", label: "None", hint: "no request body" },
@@ -49,9 +51,11 @@ const COMMON_CONTENT_TYPES = [
 export function BodyTab({
   body,
   onChange,
+  variables,
 }: {
   body: BodyForm;
   onChange: (body: BodyForm) => void;
+  variables: ProjectVariables;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -123,12 +127,14 @@ export function BodyTab({
         {body.kind === "form" ? (
           <FormBody
             rows={body.form}
+            variables={variables}
             onChange={(form) => onChange({ ...body, form })}
           />
         ) : null}
         {body.kind === "multipart" ? (
           <MultipartBody
             fields={body.multipart}
+            variables={variables}
             onChange={(multipart) => onChange({ ...body, multipart })}
           />
         ) : null}
@@ -261,9 +267,11 @@ function JsonToolbar({
 
 function FormBody({
   rows,
+  variables,
   onChange,
 }: {
   rows: KvRow[];
+  variables: ProjectVariables;
   onChange: (rows: KvRow[]) => void;
 }) {
   return (
@@ -278,6 +286,7 @@ function FormBody({
       <KvEditor
         rows={rows}
         onChange={onChange}
+        variables={variables}
         keyPlaceholder="Field"
         valuePlaceholder="Value"
         emptyHint="No form fields yet."
@@ -288,9 +297,11 @@ function FormBody({
 
 function MultipartBody({
   fields,
+  variables,
   onChange,
 }: {
   fields: MultipartUiField[];
+  variables: ProjectVariables;
   onChange: (fields: MultipartUiField[]) => void;
 }) {
   function addText() {
@@ -406,21 +417,19 @@ function MultipartBody({
               </div>
               <div className="mt-2 grid gap-2">
                 {field.kind === "text" ? (
-                  <Input
+                  <VariableInput
                     value={field.value}
-                    onChange={(event) =>
-                      update(field.id, { value: event.target.value })
-                    }
+                    onChange={(value) => update(field.id, { value })}
+                    variables={variables}
                     placeholder="Value"
                     className="h-8 font-mono text-xs"
                   />
                 ) : (
                   <div className="grid gap-2 md:grid-cols-3">
-                    <Input
+                    <VariableInput
                       value={field.path}
-                      onChange={(event) =>
-                        update(field.id, { path: event.target.value })
-                      }
+                      onChange={(path) => update(field.id, { path })}
+                      variables={variables}
                       placeholder="./path/to/file.png"
                       className="h-8 font-mono text-xs md:col-span-3"
                     />

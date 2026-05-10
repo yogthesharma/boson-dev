@@ -3,6 +3,7 @@ import {
   BootstrapErrorScreen,
   LoadingScreen,
 } from "@/components/boot-states";
+import { EnvChip } from "@/components/env-chip";
 import { RequestBar } from "@/components/request-bar";
 import { RequestPane } from "@/components/request-pane";
 import { ResponsePane } from "@/components/response-pane";
@@ -17,11 +18,13 @@ import { useCurrentRequest } from "@/hooks/use-current-request";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useProject } from "@/hooks/use-project";
 import { useRequestActions } from "@/hooks/use-request-actions";
+import { useVariables } from "@/hooks/use-variables";
 
 export function App() {
   const {
     project,
     history,
+    version,
     loading,
     bootstrapError,
     selectedRequestId,
@@ -39,23 +42,20 @@ export function App() {
     setAuth,
     setOptions,
     patchForm,
-    selectedDraft,
-    isStaleDraft,
-    hasUnsavedChanges,
     draftRequest,
   } = useCurrentRequest(project, selectedRequestId);
 
-  const { running, saveDraft, saveToYaml, discardDraft, runSelectedRequest } =
-    useRequestActions({
-      selectedRequestId,
-      selectedEnvironmentId,
-      draftRequest,
-      refresh,
-    });
+  const variables = useVariables(project, selectedEnvironmentId);
+
+  const { running, runSelectedRequest } = useRequestActions({
+    selectedRequestId,
+    selectedEnvironmentId,
+    draftRequest,
+    refresh,
+  });
 
   useKeyboardShortcuts({
     onRun: selectedRequestId && !running ? runSelectedRequest : undefined,
-    onSave: selectedRequestId ? saveDraft : undefined,
   });
 
   if (loading) {
@@ -74,24 +74,20 @@ export function App() {
     <SidebarProvider>
       <AppSidebar
         project={project}
-        history={history}
+        version={version?.version ?? null}
         selectedRequestId={selectedRequestId}
-        selectedEnvironmentId={selectedEnvironmentId}
         onSelectRequest={setSelectedRequestId}
-        onSelectEnvironment={setSelectedEnvironmentId}
       />
       <SidebarInset className="flex h-svh min-h-0 flex-col overflow-hidden">
         <WorkspaceHeader
           workspaceName={project?.name ?? "Boson"}
-          folder={form.folder || null}
-          requestName={form.name}
-          hasDraft={Boolean(selectedDraft)}
-          isStale={isStaleDraft}
-          hasUnsavedChanges={hasUnsavedChanges}
-          canAct={Boolean(selectedRequestId)}
-          onNameChange={(name) => patchForm({ name })}
-          onSaveToYaml={saveToYaml}
-          onDiscardDraft={discardDraft}
+          envChip={
+            <EnvChip
+              environments={project?.environments ?? []}
+              currentId={selectedEnvironmentId}
+              onSelect={setSelectedEnvironmentId}
+            />
+          }
         />
 
         <RequestBar
@@ -99,12 +95,10 @@ export function App() {
           url={form.url}
           running={running}
           canRun={Boolean(selectedRequestId)}
-          hasDraft={Boolean(selectedDraft)}
-          hasUnsavedChanges={hasUnsavedChanges}
+          variables={variables}
           onMethodChange={(method) => patchForm({ method })}
           onUrlChange={(url) => patchForm({ url })}
           onRun={runSelectedRequest}
-          onSaveDraft={saveDraft}
         />
 
         <ResizablePanelGroup
@@ -118,6 +112,7 @@ export function App() {
               body={form.body}
               auth={form.auth}
               options={form.options}
+              variables={variables}
               onQueryChange={setQuery}
               onHeadersChange={setHeaders}
               onBodyChange={setBody}

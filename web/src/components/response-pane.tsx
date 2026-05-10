@@ -1,23 +1,37 @@
-import { useMemo } from "react";
-import { ClockIcon, DatabaseIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  CopyIcon,
+  DatabaseIcon,
+  DownloadIcon,
+  Maximize2Icon,
+} from "lucide-react";
 
 import { MethodBadge } from "@/components/method-badge";
-import { StatusPill } from "@/components/status-pill";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   CodeEditor,
   languageFromBody,
   languageFromContentType,
 } from "@/components/ui/code-editor";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs } from "@/components/ui/vercel-tabs";
 import { cn } from "@/lib/utils";
-import { formatTimestamp } from "@/lib/format";
 import type { HistoryItem } from "@/types";
+
+type ResponseTabId = "response" | "headers" | "timeline" | "tests";
+type BodyFormat = "json" | "raw";
+
+const BODY_FORMAT_LABELS: Record<BodyFormat, string> = {
+  json: "JSON",
+  raw: "Raw",
+};
 
 export function ResponsePane({ item }: { item: HistoryItem | undefined }) {
   if (!item) {
@@ -29,7 +43,7 @@ export function ResponsePane({ item }: { item: HistoryItem | undefined }) {
 function EmptyState() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 items-center gap-2 border-b bg-background px-4 text-xs text-muted-foreground">
+      <div className="flex h-10 items-center gap-2 bg-background px-4 text-xs text-muted-foreground">
         <span>Response</span>
       </div>
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
@@ -46,10 +60,13 @@ function EmptyState() {
 }
 
 function PopulatedPane({ item }: { item: HistoryItem }) {
+  const [activeTab, setActiveTab] = useState<ResponseTabId>("response");
+  const [bodyFormat, setBodyFormat] = useState<BodyFormat>("json");
   const headerCount = useMemo(
     () => Object.keys(item.response_headers ?? {}).length,
     [item.response_headers],
   );
+
   const contentType = item.response_headers?.["content-type"];
   const prettyLanguage = useMemo(() => {
     const fromHeader = languageFromContentType(contentType);
@@ -73,101 +90,116 @@ function PopulatedPane({ item }: { item: HistoryItem }) {
     () => formatBytes(byteSize(item.response_body ?? "")),
     [item.response_body],
   );
+  const status = item.status ?? 0;
+  const responseTabs = useMemo(
+    () => [
+      { id: "response", label: "Response" },
+      { id: "headers", label: `Headers ${headerCount}` },
+      { id: "timeline", label: "Timeline" },
+      { id: "tests", label: "Tests" },
+    ],
+    [headerCount],
+  );
+  const bodyValue = bodyFormat === "json" ? prettyBody : item.response_body;
+  const bodyLanguage = bodyFormat === "json" ? prettyLanguage : "plaintext";
 
   return (
-    <Tabs defaultValue="pretty" className="flex h-full min-h-0 flex-col gap-0">
-      <div className="flex items-center gap-2 border-b bg-background px-4 py-2">
-        <TabsList variant="line" className="h-9 gap-1 bg-transparent p-0">
-          <TabsTrigger value="pretty" className="h-8 gap-1.5 px-2.5 text-xs">
-            Pretty
-          </TabsTrigger>
-          <TabsTrigger value="raw" className="h-8 gap-1.5 px-2.5 text-xs">
-            Raw
-          </TabsTrigger>
-          <TabsTrigger value="headers" className="h-8 gap-1.5 px-2.5 text-xs">
-            Headers
-            {headerCount > 0 ? (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-11 shrink-0 items-center gap-3 bg-background px-4">
+        <Tabs
+          tabs={responseTabs}
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as ResponseTabId)}
+        />
+
+        <div className="ml-auto flex items-center gap-3">
+          {activeTab === "response" ? (
+            <Select
+              value={bodyFormat}
+              onValueChange={(value) => setBodyFormat(value as BodyFormat)}
+            >
+              <SelectTrigger className="h-6 w-[72px] rounded-md border-border/60 bg-transparent px-2 font-mono text-[10px] uppercase tracking-wide shadow-none focus-visible:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {Object.entries(BODY_FORMAT_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value} className="text-xs">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          <div className="flex items-center gap-2.5 text-[11px]">
+            <span
+              className={cn(
+                "font-mono text-xs font-semibold tabular-nums",
+                statusToTextClass(status),
+              )}
+            >
+              {statusLabel(status)}
+            </span>
+            <span className="text-muted-foreground tabular-nums">
+              {item.duration_ms}ms
+            </span>
+            <span className="text-muted-foreground tabular-nums">
+              {sizeLabel}
+            </span>
+            {item.response_truncated ? (
               <Badge
                 variant="secondary"
-                className="h-4 min-w-4 rounded-sm px-1 text-[10px]"
+                className="h-5 border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] text-amber-700 dark:text-amber-300"
               >
-                {headerCount}
+                truncated
               </Badge>
             ) : null}
-          </TabsTrigger>
-        </TabsList>
+          </div>
 
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
-          <MethodBadge method={item.method} />
-          <StatusPill status={item.status ?? 0} />
-          <span className="inline-flex items-center gap-1">
-            <ClockIcon className="size-3" />
-            {item.duration_ms} ms
-          </span>
-          <span>{sizeLabel}</span>
-          {item.response_truncated ? (
-            <Badge
-              variant="secondary"
-              className="h-5 border-amber-500/40 bg-amber-500/10 px-1.5 text-[10px] text-amber-700 dark:text-amber-300"
-            >
-              truncated
-            </Badge>
-          ) : null}
+          <div className="h-4 w-px bg-border/80" aria-hidden />
+
+          <ResponseActions
+            body={item.response_body ?? ""}
+            url={item.url}
+            activeTab={activeTab}
+            headers={item.response_headers ?? {}}
+          />
         </div>
       </div>
 
       {item.error ? (
-        <div className="border-b bg-destructive/10 px-4 py-2 text-xs text-destructive">
+        <div className="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
           {item.error}
         </div>
       ) : null}
 
-      <TabsContent
-        value="pretty"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      >
-        {prettyBody ? (
-          <CodeEditor
-            value={prettyBody}
-            language={prettyLanguage}
-            readOnly
-            embedded
-            className="flex-1 border-0"
-          />
-        ) : (
-          <ResponseEmpty />
-        )}
-      </TabsContent>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {activeTab === "response" ? (
+          bodyValue ? (
+            <CodeEditor
+              value={bodyValue}
+              language={bodyLanguage}
+              readOnly
+              embedded
+              minimal={bodyFormat === "raw"}
+              className="flex-1 border-0"
+            />
+          ) : (
+            <ResponseEmpty />
+          )
+        ) : null}
 
-      <TabsContent
-        value="raw"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      >
-        {item.response_body ? (
-          <CodeEditor
-            value={item.response_body}
-            language="plaintext"
-            readOnly
-            embedded
-            minimal
-            className="flex-1 border-0"
-          />
-        ) : (
-          <ResponseEmpty />
-        )}
-      </TabsContent>
+        {activeTab === "headers" ? (
+          <HeadersTable headers={item.response_headers ?? {}} />
+        ) : null}
 
-      <TabsContent
-        value="headers"
-        className="min-h-0 flex-1 overflow-auto p-4"
-      >
-        <HeadersTable headers={item.response_headers ?? {}} />
-        <p className="mt-4 text-[11px] text-muted-foreground">
-          Captured {formatTimestamp(item.created_at)} ·
-          <span className="ml-1 font-mono">{item.url}</span>
-        </p>
-      </TabsContent>
-    </Tabs>
+        {activeTab === "timeline" ? (
+          <TimelineView item={item} status={status} />
+        ) : null}
+
+        {activeTab === "tests" ? <TestsView /> : null}
+      </div>
+    </div>
   );
 }
 
@@ -183,33 +215,34 @@ function HeadersTable({ headers }: { headers: Record<string, string> }) {
   const entries = Object.entries(headers);
   if (entries.length === 0) {
     return (
-      <p className="rounded-md border border-dashed bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
         No headers were returned.
-      </p>
+      </div>
     );
   }
   return (
-    <div className="overflow-hidden rounded-md border bg-card">
-      <table className="w-full table-fixed text-sm">
-        <thead>
-          <tr className="border-b bg-muted/40 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <th className="w-[35%] px-3 py-2 text-left">Header</th>
-            <th className="px-3 py-2 text-left">Value</th>
+    <div className="min-h-0 flex-1 overflow-auto">
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[240px]" />
+          <col />
+        </colgroup>
+        <thead className="sticky top-0 z-10 bg-background">
+          <tr className="border-b text-[11px] font-medium text-muted-foreground">
+            <th className="py-2 pl-8 pr-4 text-left font-medium">Name</th>
+            <th className="py-2 pr-4 text-left font-medium">Value</th>
           </tr>
         </thead>
         <tbody>
-          {entries.map(([key, value], index) => (
+          {entries.map(([key, value]) => (
             <tr
               key={key}
-              className={cn(
-                "transition-colors hover:bg-muted/30",
-                index !== entries.length - 1 ? "border-b" : "",
-              )}
+              className="border-b border-border/40 last:border-b-0 hover:bg-muted/30"
             >
-              <td className="break-all px-3 py-1.5 align-middle font-mono text-xs">
+              <td className="break-all py-2 pl-8 pr-4 align-middle font-mono text-muted-foreground">
                 {key}
               </td>
-              <td className="break-all px-3 py-1.5 align-middle font-mono text-xs">
+              <td className="break-all py-2 pr-4 align-middle font-mono">
                 {value}
               </td>
             </tr>
@@ -218,6 +251,170 @@ function HeadersTable({ headers }: { headers: Record<string, string> }) {
       </table>
     </div>
   );
+}
+
+function TimelineView({ item, status }: { item: HistoryItem; status: number }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[240px]" />
+          <col className="w-[80px]" />
+          <col />
+          <col className="w-[140px]" />
+        </colgroup>
+        <thead className="sticky top-0 z-10 bg-background">
+          <tr className="border-b text-[11px] font-medium text-muted-foreground">
+            <th className="py-2 pl-8 pr-4 text-left font-medium">Status</th>
+            <th className="py-2 pr-4 text-left font-medium">Method</th>
+            <th className="py-2 pr-4 text-left font-medium">URL</th>
+            <th className="py-2 pr-4 text-left font-medium">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border/40 last:border-b-0 hover:bg-muted/30">
+            <td className="py-2 pl-8 pr-4 align-middle">
+              <span
+                className={cn(
+                  "font-mono font-semibold tabular-nums",
+                  statusToTextClass(status),
+                )}
+              >
+                {statusLabel(status)}
+              </span>
+            </td>
+            <td className="py-2 pr-4 align-middle">
+              <MethodBadge method={item.method} variant="text" />
+            </td>
+            <td className="truncate py-2 pr-4 align-middle font-mono">
+              {item.url}
+            </td>
+            <td className="py-2 pr-4 align-middle text-muted-foreground tabular-nums">
+              {relativeTime(item.created_at)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TestsView() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+      No tests found
+    </div>
+  );
+}
+
+function ResponseActions({
+  body,
+  url,
+  activeTab,
+  headers,
+}: {
+  body: string;
+  url: string;
+  activeTab: ResponseTabId;
+  headers: Record<string, string>;
+}) {
+  const copyValue =
+    activeTab === "headers" ? JSON.stringify(headers, null, 2) : body || url;
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted-foreground hover:text-foreground"
+        aria-label="Copy response"
+        onClick={() => void navigator.clipboard?.writeText(copyValue)}
+      >
+        <CopyIcon className="size-3" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted-foreground hover:text-foreground"
+        aria-label="Download response"
+        onClick={() => downloadText(copyValue, "boson-response.txt")}
+      >
+        <DownloadIcon className="size-3" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted-foreground hover:text-foreground"
+        aria-label="Open response tools"
+        disabled
+      >
+        <Maximize2Icon className="size-3" />
+      </Button>
+    </div>
+  );
+}
+
+function downloadText(text: string, filename: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function statusLabel(status: number): string {
+  if (!status) return "ERR";
+  return `${status} ${statusText(status)}`;
+}
+
+function statusText(status: number): string {
+  const labels: Record<number, string> = {
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    204: "No Content",
+    301: "Moved",
+    302: "Found",
+    304: "Not Modified",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    409: "Conflict",
+    422: "Unprocessable",
+    429: "Too Many Requests",
+    500: "Server Error",
+    502: "Bad Gateway",
+    503: "Unavailable",
+    504: "Timeout",
+  };
+  return labels[status] ?? (status >= 200 && status < 300 ? "OK" : "");
+}
+
+function statusToTextClass(status: number): string {
+  if (status >= 500) return "text-destructive";
+  if (status >= 400) return "text-amber-600 dark:text-amber-400";
+  if (status >= 200) return "text-emerald-600 dark:text-emerald-400";
+  return "text-muted-foreground";
+}
+
+function relativeTime(value: string): string {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return "";
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (diffSeconds < 60) return "just now";
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60)
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24)
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 
 function byteSize(text: string): number {

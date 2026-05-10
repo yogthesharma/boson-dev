@@ -1,145 +1,304 @@
-# boson
+# Boson
 
-Boson is a local-first REST API client. Users keep API definitions in
-source-controlled YAML, while the Rust server projects those files into a local
-SQLite database for drafts, request history, and safe UI editing.
+**Boson** is a **code-first, local-only** HTTP client: your API collection lives in **plain YAML** in the repo, you run a **small native app** on your machine, and you get a **Postman/Bruno-style** UI for sending requests, environments, and history—**no cloud account, no hosted sync, and no separate “Boson server” in another datacenter**.
 
-The same binary can:
+> **Why Boson?**  
+> Treat collections like code: review them in PRs, branch them, and keep secrets out of git. The binary loads your YAML, runs requests (via [`reqwest`](https://github.com/seanmonstar/reqwest)), and stores **drafts and response history in a local SQLite file** so the UI stays fast and team-friendly without a SaaS.
 
-- initialize a project (`boson init`)
-- run the local API server and browser UI (`boson dev` / `boson serve`)
-- execute requests through Rust and store response history in SQLite
-- embed the production Vite + React UI into the executable
+---
 
-## Layout
+## Table of contents
 
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Install from source](#install-from-source)
+- [Quick start](#quick-start)
+- [Development workflows](#development-workflows)
+- [Project layout (on disk)](#project-layout-on-disk)
+- [YAML project format](#yaml-project-format)
+- [Variables and secrets](#variables-and-secrets)
+- [CLI reference](#cli-reference)
+- [HTTP API (local)](#http-api-local)
+- [Environment variables](#environment-variables)
+- [Example workspace](#example-workspace)
+- [License](#license)
+
+---
+
+## Features
+
+- **Git-friendly collections** — Requests and environments are **YAML** you can split across files; `boson.yml` controls **include globs** (e.g. `boson/requests/**/*.yml`).
+- **Environments** — Per-environment **variables** (e.g. `base_url`) for `{{placeholders}}` in URL, headers, query, and body.
+- **Secrets (local)** — Store values like API keys **encrypted in SQLite** (per-project key), referenced in YAML as `{{secret:NAME}}` so they never land in the committed files.
+- **Execution** — HTTP methods, JSON / form / raw / **multipart** bodies, optional **Bearer / Basic / API key** auth (declared in YAML).
+- **Runner + UI** — Same **`boson`** binary serves the **React** UI (embedded in release builds) and exposes a **`/api/*`** surface backed by Rust + SQLite.
+- **CLI** — **`boson run <request-id>`** runs a request with resolved env/secrets and prints the response (great for scripts and CI).
+- **Lint** — **`boson lint`** validates YAML before you push.
+
+---
+
+## How it works
+
+1. You maintain **`boson.yml`** and included YAML files under **`boson/`** — this is the **source of truth** (commit these).
+2. On load, Boson **merges** includes into a project snapshot and mirrors metadata into **`.boson/state.db`** for drafts, history, and encrypted secrets.
+3. **`boson serve`** or **`boson dev`** binds **loopback** (default `127.0.0.1:8787`), serves **`/api/*`** from Rust, and serves the **SPA** (embedded static assets or proxied Vite in dev).
+
+There is **no requirement for any Boson-hosted backend**. The only “server” involved is the **local process** inside the binary talking to your filesystem and SQLite—similar in spirit to running a local API tool, not renting a cloud collection service.
+
+```text
+  ┌──────────────┐     HTTP (loopback)      ┌─────────────────────────────┐
+  │  Web UI      │  ◄──────────────────►  │  boson (Axum)              │
+  │  (Vite/React)│      /api/*            │  · YAML load / save         │
+  └──────────────┘                        │  · reqwest HTTP execution   │
+        │                                 │  · SQLite (history, etc.)  │
+        │  (dev: optional proxy)          └──────────────┬──────────────┘
+        │                                                │
+        ▼                                                ▼
+  optional: pnpm dev                         .boson/state.db + your repo YAML
+  → proxies /api to boson
 ```
-boson/
-├── Cargo.toml
-├── build.rs              # runs `pnpm build` in web/ when embedding the UI
-├── src/
-│   ├── main.rs           # tracing + clap entrypoint
-│   ├── cli.rs            # init/dev/serve/update commands
-│   ├── config.rs         # YAML schema
-│   ├── db.rs             # SQLite migrations and repositories
-│   ├── project.rs        # project discovery/init/load/save helpers
-│   ├── runner.rs         # request execution
-│   ├── server.rs         # axum server, /api routes, fallback dispatch
-│   ├── proxy.rs          # HTTP + WS reverse proxy to the Vite dev server
-│   └── assets.rs         # rust-embed-backed static asset handler
-└── web/                  # Vite + React + TS UI
-    ├── package.json
-    ├── vite.config.ts
-    └── src/
-        ├── main.tsx
-        ├── App.tsx
-        └── index.css
+
+---
+
+## Install from source
+
+**Prerequisites**
+
+- **Rust** (current stable; nightly is fine)
+- **Node 20+** and **pnpm** (for building the web UI; not needed to *run* a release binary that already embeds the UI)
+
+**Build a release binary (UI embedded by default via the `embed-ui` feature):**
+
+```bash
+git clone <your-fork-or-upstream-url> boson
+cd boson
+pnpm install --dir web
+cargo build --release
 ```
 
-## Prerequisites
+The binary is at `target/release/boson`.
 
-- Rust (the project tracks current stable; nightly works too)
-- Node 20+ and `pnpm`
+- Use **`cargo build --no-default-features`** to skip the `pnpm build` step in `build.rs` when you are only iterating on Rust (faster; you must build the web app yourself if you need a UI in the binary).
+- Set **`BOSON_SKIP_WEB_BUILD=1`** during `cargo build` if you already have `web/dist` and want to skip the UI build step (see [Environment variables](#environment-variables)).
+
+---
 
 ## Quick start
 
-### Initialize a user project
+### 1. Create a project
 
 ```bash
-cargo run --no-default-features -- init ./example-api --name Example
+cargo run --no-default-features -- init ./my-api --name "My API"
 ```
 
 This creates:
 
 ```text
-example-api/
-├── boson.yml
+my-api/
+├── boson.yml                 # manifest: name, schema_version, includes
 ├── boson/
-│   ├── environments.yml
-│   └── requests.yml
+│   ├── environments.yml      # environment variables
+│   └── requests.yml          # requests (or use boson/requests/*.yml)
 └── .boson/
-    └── state.db
+    ├── state.db              # local state (history, drafts, secrets) — gitignore
+    └── key.bin               # per-project secret encryption key — gitignore
 ```
 
-`boson.yml` and `boson/*.yml` are the source of truth and should be committed.
-`.boson/state.db` is local runtime state and is added to `.gitignore`.
+**Commit** `boson.yml` and `boson/**/*.yml`. **Do not commit** `.boson/` (handled by `.gitignore` from `init`).
 
-### Development (HMR)
+### 2. Run the app (development with HMR)
+
+From the repo root, pointing at your project directory:
 
 ```bash
-cargo run --no-default-features -- dev --project-dir ./example-api
+cargo run --no-default-features -- dev --project-dir ./my-api
 ```
 
-This:
+This typically:
 
-1. Starts the axum server on `http://127.0.0.1:8787`.
-2. Spawns `pnpm dev` in `web/` (running Vite on `127.0.0.1:5173`).
-3. Reverse-proxies any non-`/api/*` request to Vite, including the HMR
-   WebSocket. Edits in `web/src/**` hot-reload in the browser.
+1. Starts the **Axum** server on **`http://127.0.0.1:8787`** (configurable).
+2. Runs **`pnpm dev`** in **`web/`** (Vite on **`127.0.0.1:5173`** by default).
+3. **Reverse-proxies** non-`/api/*` traffic (including **HMR WebSocket**) to Vite so editing React files hot-reloads.
 
-`--no-default-features` skips the heavy `pnpm build` step in `build.rs` for
-faster Rust iteration; you can also use the default features if you don't mind
-the upfront UI build.
+Then open **`http://127.0.0.1:8787`** in the browser.
 
-Useful flags:
+**Useful flags:**
 
 ```bash
-boson dev --project-dir ./example-api --port 9000 --vite-port 5174
-boson dev --project-dir ./example-api --no-spawn-vite
-boson dev --project-dir ./example-api --no-open
+cargo run --no-default-features -- dev --project-dir ./my-api --port 9000 --vite-port 5174
+cargo run --no-default-features -- dev --project-dir ./my-api --no-spawn-vite   # you run Vite yourself
+cargo run --no-default-features -- dev --project-dir ./my-api --no-open
 ```
 
-### Production (single binary)
+### 3. Run without opening the UI
+
+Execute a request **by id** (prints to stdout):
 
 ```bash
-cargo build --release
-./target/release/boson serve --project-dir ./example-api
+cargo run --no-default-features -- run hello --project-dir ./my-api
 ```
 
-The `embed-ui` feature (default-on) causes `build.rs` to run `pnpm install` /
-`pnpm build` in `web/` and `rust-embed` bakes `web/dist/` into the binary.
-The resulting executable has no Node runtime requirement.
+---
 
-## Try the example workspace
+## Development workflows
 
-A complete playground lives in `example/`: a Fastify HTTP server plus a
-pre-seeded Boson project that targets it. End-to-end test in two terminals:
+There are **two** common ways to hack on the UI:
+
+| Workflow | You open | Notes |
+|----------|----------|--------|
+| **`boson dev`** | `http://127.0.0.1:8787` (default) | Rust serves `/api/*` and proxies everything else to Vite + HMR. Best **full-stack** dev. |
+| **`pnpm dev` only** (in `web/`) | `http://127.0.0.1:5173` | Vite dev server; **`/api/*` is proxied** to a **separately running** `boson serve` (default **`http://127.0.0.1:8787`**). Override with **`BOSON_API_URL`**. Fast iteration when you mostly touch React. |
+
+Example for workflow 2:
 
 ```bash
-# terminal 1: start the demo API on http://127.0.0.1:4321
-cd example/server
-pnpm install
-pnpm dev
+# terminal A — API + SQLite backing the UI
+cargo run --no-default-features -- serve --project-dir ./my-api
 
-# terminal 2: serve the Boson UI against ./example
-cargo run -- dev --project-dir example
+# terminal B — Vite (proxies /api → boson)
+cd web && BOSON_API_URL=http://127.0.0.1:8787 pnpm dev
 ```
 
-See [`example/README.md`](example/README.md) for the full walkthrough,
-including the bearer-token / secrets demo.
+See comments in [`web/vite.config.ts`](web/vite.config.ts) for ports and proxy behavior.
 
-## API
+---
 
-The Rust server owns `/api/*`. Initial endpoints:
+## Project layout (on disk)
 
-- `GET /api/health`
-- `GET /api/version`
-- `GET /api/project`
-- `GET /api/environments`
-- `GET /api/requests`
-- `GET /api/drafts`
-- `POST /api/drafts/{request_id}`
-- `DELETE /api/drafts/{request_id}`
-- `POST /api/drafts/{request_id}/save`
-- `GET /api/history`
-- `POST /api/requests/{request_id}/run`
+Repository layout (high level):
 
-Anything outside `/api/*` falls through to the UI (embedded assets in release,
-Vite proxy in dev).
+```text
+boson/
+├── Cargo.toml
+├── build.rs                  # optional `pnpm build` in web/ when embedding UI
+├── src/
+│   ├── main.rs               # tracing + clap entrypoint
+│   ├── cli/                  # init, serve, dev, run, lint, update
+│   ├── config/               # YAML schema (requests, auth, body, …)
+│   ├── db/                   # SQLite store + migrations
+│   ├── project.rs            # discovery, load/save, glob includes
+│   ├── runner/               # HTTP execution + variable resolution
+│   ├── server/               # Axum app, /api routes, static UI / Vite proxy
+│   ├── proxy.rs              # reverse proxy to Vite in dev
+│   └── assets.rs             # rust-embed production assets
+└── web/                      # Vite + React + TypeScript client
+    ├── package.json
+    ├── vite.config.ts
+    └── src/
+```
+
+---
+
+## YAML project format
+
+- **`schema_version: 2`** in `boson.yml` (v1 files are rejected with a clear error).
+- **`includes`** — list of **glob patterns** (relative to project root) for extra YAML. Defaults include `boson/environments.yml`, `boson/requests.yml`, and `boson/**` trees.
+- **Include files** may define **`environments:`** and/or **`requests:`** (both optional in a file so you can split concerns).
+
+**Request fields** (see [`src/config/mod.rs`](src/config/mod.rs)):
+
+| Field | Purpose |
+|--------|---------|
+| `id` | Stable id for CLI and API (e.g. `hello`) |
+| `name` | Human label in the UI |
+| `folder` | Optional `Group/Sub` path for sidebar grouping |
+| `method` | HTTP method (default `GET`) |
+| `url` | URL with `{{variable}}` support |
+| `headers` | String map |
+| `query` | String map |
+| `auth` | Optional structured auth (see below) |
+| `body` | None, string, or tagged `json` / `form` / `multipart` / `text` |
+| `options` | `timeout_ms`, redirects, `max_response_bytes`, cookies, etc. |
+
+**Auth** (`auth`, tag `kind` — `bearer`, `basic`, `api_key`; `oauth2` is reserved / not fully implemented in the runner).
+
+**Body** — either a **legacy string** for raw text, or an object with `kind: json` (and `value`) / `form` / `multipart` / `text` as implemented in [`src/config/body.rs`](src/config/body.rs).
+
+---
+
+## Variables and secrets
+
+- **Environment variables** — In `environments.yml` (or included files), each environment has a `variables` map. In request fields, use **`{{name}}`** to substitute.
+- **Secrets** — In YAML, reference **`{{secret:NAME}}`**. Values are stored **encrypted** in **`.boson/state.db`**; the API/CLI can set them without writing plaintext to disk in your repo.
+- **Host / process env** — The resolver can also treat some references as **host environment** where applicable (useful for local-only values); see the implementation in [`src/runner/resolve.rs`](src/runner/resolve.rs) for exact behavior.
+
+---
+
+## CLI reference
+
+| Command | Purpose |
+|---------|---------|
+| **`boson init [dir]`** | Create `boson.yml`, `boson/`, `.boson/`, seed SQLite + keys |
+| **`boson dev`** | Dev server: API + **spawn Vite** + proxy (HMR) |
+| **`boson serve`** | **Production** mode: serve **embedded** UI from the binary + API |
+| **`boson run <request_id>`** | Run one request; optional `--environment`, `--raw` |
+| **`boson lint` / `boson check`** | Validate YAML |
+| **`boson update`** | Self-update from GitHub releases (optional config via env) |
+
+Global defaults: `--project-dir` usually defaults to **`.`**; server bind defaults to **`127.0.0.1:8787`**.
+
+---
+
+## HTTP API (local)
+
+All JSON REST routes are **on the same origin** as the UI in normal use, under **`/api`**. The web app talks to these endpoints; you can also use them for automation on loopback.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/version` | Version info |
+| `GET` | `/api/project` | Project metadata |
+| `GET` | `/api/environments` | Environments from YAML |
+| `GET` | `/api/requests` | Merged requests |
+| `GET` | `/api/drafts` | Draft state |
+| `POST` / `DELETE` | `/api/drafts/{request_id}` | Upsert / delete draft |
+| `POST` | `/api/drafts/{request_id}/save` | Persist draft to YAML |
+| `GET` / `DELETE` | `/api/history` | List / clear history |
+| `DELETE` | `/api/history/{id}` | Delete one history row |
+| `GET` | `/api/runs` | List runs |
+| `GET` | `/api/runs/{run_id}` | Run detail |
+| `POST` | `/api/runs/{run_id}/cancel` | Cancel a run |
+| `POST` | `/api/requests/{request_id}/run` | Execute a request from the UI |
+| `GET` | `/api/secrets` | List secret **names** (not values) |
+| `POST` / `DELETE` | `/api/secrets/{name}` | Set / remove a secret value |
+
+Non-`/api/*` requests are handled by the **UI** (embedded files in release, or **Vite proxy** in `boson dev`).
+
+---
 
 ## Environment variables
 
-- `RUST_LOG` — standard tracing filter, e.g. `RUST_LOG=boson=debug,tower_http=info`.
-- `BOSON_SKIP_WEB_BUILD` — set during `cargo build` to skip the UI build (you
-  must have already populated `web/dist`).
-- `BOSON_PNPM` — override the `pnpm` binary used by `build.rs`.
+| Variable | Where | Purpose |
+|----------|--------|---------|
+| **`RUST_LOG`** | Runtime | e.g. `RUST_LOG=boson=debug,tower_http=info` for tracing |
+| **`BOSON_SKIP_WEB_BUILD`** | `cargo build` | Skip `pnpm` UI build; you must supply `web/dist` yourself |
+| **`BOSON_PNPM`** | `build.rs` | Override `pnpm` binary path |
+| **`BOSON_API_URL`** | `web` dev | Vite proxy target for `/api` (default `http://127.0.0.1:8787`) |
+| **`VITE_DEV_PORT`** | `web` dev | Vite listen port (default `5173`) |
+| **`BOSON_UPDATE_REPO`**, **`BOSON_UPDATE_ASSET`** | `boson update` | Self-update source configuration |
+
+---
+
+## Example workspace
+
+The [`example/`](example/) directory is a full **playground**: a tiny **Fastify** server plus a ready-made Boson project (folders, env, **`{{secret:...}}`** demo). Follow **[`example/README.md`](example/README.md)** for the end-to-end walkthrough.
+
+Typical two-terminal flow:
+
+```bash
+# terminal 1 — demo API
+cd example/server && pnpm install && pnpm dev
+
+# terminal 2 — Boson against ./example
+cargo run --no-default-features -- dev --project-dir example
+```
+
+---
+
+## License
+
+MIT — see [`Cargo.toml`](Cargo.toml) `license` field.
+
+---
+
+**Summary:** Boson is a **local, code-first REST client** inspired by **Postman/Bruno**, built around **YAML collections**, a **Rust + SQLite** core, and a **modern React UI**—with **no cloud dependency** for day-to-day use.

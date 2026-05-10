@@ -1,5 +1,10 @@
 import type { ApiRequest, HistoryItem, ProjectView } from "@/types";
 
+export interface VersionInfo {
+  name: string;
+  version: string;
+}
+
 export async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -32,6 +37,7 @@ export async function deleteRequest(url: string): Promise<void> {
 
 export const fetchProject = () => getJson<ProjectView>("/api/project");
 export const fetchHistory = () => getJson<HistoryItem[]>("/api/history");
+export const fetchVersion = () => getJson<VersionInfo>("/api/version");
 
 export const saveDraft = (id: string, request: ApiRequest) =>
   postJson(`/api/drafts/${id}`, request);

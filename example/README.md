@@ -38,7 +38,7 @@ From the repo root, in another terminal:
 cargo run -- dev --project-dir example
 ```
 
-That serves the embedded UI at <http://127.0.0.1:7777> and watches `example/`
+That serves the embedded UI at <http://127.0.0.1:8787> (unless you pass `--port`) and watches `example/`
 for YAML changes. The sidebar should list `Health check`, `List todos`,
 `Create todo`, `Echo (json)`, `Secure (bearer)`, etc.
 
@@ -48,7 +48,7 @@ The `secure` request uses `{{secret:DEMO_TOKEN}}`. Seed it once before running:
 
 ```bash
 cargo run -- run secure --project-dir example   # without secret -> 401
-curl -X POST http://127.0.0.1:7777/api/secrets/DEMO_TOKEN \
+curl -X POST http://127.0.0.1:8787/api/secrets/DEMO_TOKEN \
   -H 'content-type: application/json' \
   -d '{"value":"boson-demo-token"}'
 cargo run -- run secure --project-dir example   # now -> 200
