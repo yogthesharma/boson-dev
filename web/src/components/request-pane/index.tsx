@@ -65,23 +65,19 @@ export function RequestPane({
 
       <div className="min-h-0 flex-1 overflow-auto">
         {activeTab === "params" ? (
-          <div className="p-4">
-            <ParamsTab
-              rows={query}
-              onChange={onQueryChange}
-              variables={variables}
-            />
-          </div>
+          <ParamsTab
+            rows={query}
+            onChange={onQueryChange}
+            variables={variables}
+          />
         ) : null}
 
         {activeTab === "headers" ? (
-          <div className="p-4">
-            <HeadersTab
-              rows={headers}
-              onChange={onHeadersChange}
-              variables={variables}
-            />
-          </div>
+          <HeadersTab
+            rows={headers}
+            onChange={onHeadersChange}
+            variables={variables}
+          />
         ) : null}
 
         {activeTab === "body" ? (
@@ -110,6 +106,18 @@ export function RequestPane({
           </div>
         ) : null}
       </div>
+
+      {activeTab === "params" || activeTab === "headers" ? (
+        <div className="shrink-0 px-5 py-2">
+          <button
+            type="button"
+            className="text-xs text-primary hover:underline"
+            onClick={() => {}}
+          >
+            Bulk Edit
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

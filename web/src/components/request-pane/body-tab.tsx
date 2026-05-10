@@ -289,7 +289,6 @@ function FormBody({
         variables={variables}
         keyPlaceholder="Field"
         valuePlaceholder="Value"
-        emptyHint="No form fields yet."
       />
     </div>
   );

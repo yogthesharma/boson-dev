@@ -1,12 +1,23 @@
-import { PlusIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { XIcon } from "lucide-react";
 
 import { VariableInput } from "@/components/variable-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { newKvRow, type KvRow } from "@/lib/request-form";
 import type { ProjectVariables } from "@/lib/variables";
+
+const GHOST_ID = "__ghost__";
 
 interface KvEditorProps {
   rows: KvRow[];
@@ -25,18 +36,10 @@ interface KvEditorProps {
 }
 
 /**
- * Flush, table-based key/value editor that visually mirrors the response
- * pane's Headers / Timeline tables. Columns:
- *
- *   ┌──── checkbox (pl-8 from panel edge)
- *   │  ┌── name (fixed width)
- *   │  │              ┌── value (fluid)
- *   │  │              │           ┌── delete on hover (pr-4 from edge)
- *   │  │              │           │
- *   [✓] name          value       [x]
- *
- * The component owns no outer padding; the wrapping tab supplies a section
- * header (with optional `Bulk Edit` link) above the table.
+ * Inline-editable key/value editor backed by the shadcn `Table` primitives.
+ * A persistent empty "ghost" row trails the real rows — typing into it
+ * commits a real `KvRow` and a fresh ghost regenerates. Focus is preserved
+ * across the promotion via the `data-kv-row` / `data-kv-field` selectors.
  */
 export function KvEditor({
   rows,
@@ -47,7 +50,34 @@ export function KvEditor({
   variables,
   className,
 }: KvEditorProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{
+    id: string;
+    field: "key" | "value";
+  } | null>(null);
+
+  useEffect(() => {
+    if (!focusTarget) return;
+    const node = containerRef.current?.querySelector<HTMLInputElement>(
+      `input[data-kv-row="${focusTarget.id}"][data-kv-field="${focusTarget.field}"]`,
+    );
+    if (node) {
+      node.focus();
+      const len = node.value.length;
+      node.setSelectionRange(len, len);
+    }
+    setFocusTarget(null);
+  }, [focusTarget, rows]);
+
   function update(id: string, patch: Partial<KvRow>) {
+    if (id === GHOST_ID) {
+      const newRow: KvRow = { ...newKvRow(), ...patch };
+      onChange([...rows, newRow]);
+      const field: "key" | "value" =
+        patch.key !== undefined ? "key" : "value";
+      setFocusTarget({ id: newRow.id, field });
+      return;
+    }
     onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
@@ -55,125 +85,111 @@ export function KvEditor({
     onChange(rows.filter((row) => row.id !== id));
   }
 
-  function add() {
-    onChange([...rows, newKvRow()]);
-  }
-
-  const columnCount = hideValue ? 3 : 4;
+  const ghost: KvRow = {
+    id: GHOST_ID,
+    enabled: true,
+    key: "",
+    value: "",
+  };
+  const displayRows = [...rows, ghost];
 
   return (
-    <div className={cn("flex flex-col", className)}>
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-10" />
-          <col className={hideValue ? undefined : "w-[240px]"} />
-          {hideValue ? null : <col />}
-          <col className="w-10" />
-        </colgroup>
-        <thead className="sticky top-0 z-10 bg-background">
-          <tr className="border-b text-[11px] font-medium text-muted-foreground">
-            <th className="py-2 pl-8 pr-2 text-left font-medium" />
-            <th className="py-2 pr-4 text-left font-medium">
+    <div
+      ref={containerRef}
+      className={cn("my-3 mr-3 ml-7 overflow-hidden rounded-md border", className)}
+    >
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10 border-r" />
+            <TableHead className="w-[240px] border-r">
               {keyPlaceholder}
-            </th>
+            </TableHead>
             {hideValue ? null : (
-              <th className="py-2 pr-4 text-left font-medium">
-                {valuePlaceholder}
-              </th>
+              <TableHead className="border-r">{valuePlaceholder}</TableHead>
             )}
-            <th className="py-2 pr-4" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td
-                colSpan={columnCount}
-                className="py-6 pl-8 pr-4 text-left text-xs text-muted-foreground"
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {displayRows.map((row) => {
+            const isGhost = row.id === GHOST_ID;
+            return (
+              <TableRow
+                key={row.id}
+                className={cn(
+                  "group",
+                  !isGhost && !row.enabled && "opacity-50",
+                )}
               >
-                No rows yet — click <span className="font-medium">Add row</span>{" "}
-                to start.
-              </td>
-            </tr>
-          ) : null}
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className={cn(
-                "group border-b border-border/40 last:border-b-0 hover:bg-muted/30",
-                !row.enabled && "opacity-50",
-              )}
-            >
-              <td className="py-1 pl-8 pr-2 align-middle">
-                <Checkbox
-                  checked={row.enabled}
-                  onCheckedChange={(checked) =>
-                    update(row.id, { enabled: checked === true })
-                  }
-                  aria-label={`Enable ${keyPlaceholder.toLowerCase()}`}
-                />
-              </td>
-              <td className="py-1 pr-4 align-middle">
-                <Input
-                  value={row.key}
-                  onChange={(event) =>
-                    update(row.id, { key: event.target.value })
-                  }
-                  placeholder={keyPlaceholder}
-                  className="h-7 border-0 bg-transparent font-mono text-xs shadow-none focus-visible:bg-muted/30 focus-visible:ring-0"
-                />
-              </td>
-              {hideValue ? null : (
-                <td className="py-1 pr-4 align-middle">
-                  {variables ? (
-                    <VariableInput
-                      value={row.value}
-                      onChange={(value) => update(row.id, { value })}
-                      variables={variables}
-                      placeholder={valuePlaceholder}
-                      className="h-7 border-0 bg-transparent font-mono text-xs shadow-none focus-visible:bg-muted/30 focus-visible:ring-0"
-                    />
-                  ) : (
-                    <Input
-                      value={row.value}
-                      onChange={(event) =>
-                        update(row.id, { value: event.target.value })
+                <TableCell className="border-r text-center">
+                  {isGhost ? null : (
+                    <Checkbox
+                      checked={row.enabled}
+                      onCheckedChange={(checked) =>
+                        update(row.id, { enabled: checked === true })
                       }
-                      placeholder={valuePlaceholder}
-                      className="h-7 border-0 bg-transparent font-mono text-xs shadow-none focus-visible:bg-muted/30 focus-visible:ring-0"
+                      aria-label={`Enable ${keyPlaceholder.toLowerCase()}`}
                     />
                   )}
-                </td>
-              )}
-              <td className="py-1 pr-4 text-right align-middle">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-                  onClick={() => remove(row.id)}
-                  aria-label="Remove row"
-                >
-                  <XIcon className="size-3" />
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="pl-8 pr-4 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={add}
-          className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <PlusIcon className="size-3" />
-          Add row
-        </Button>
-      </div>
+                </TableCell>
+                <TableCell className="border-r">
+                  <Input
+                    data-kv-row={row.id}
+                    data-kv-field="key"
+                    value={row.key}
+                    onChange={(event) =>
+                      update(row.id, { key: event.target.value })
+                    }
+                    placeholder={keyPlaceholder}
+                    className="h-7 border-0 !bg-transparent px-1 text-xs shadow-none focus-visible:ring-0"
+                  />
+                </TableCell>
+                {hideValue ? null : (
+                  <TableCell className="border-r">
+                    {variables ? (
+                      <VariableInput
+                        data-kv-row={row.id}
+                        data-kv-field="value"
+                        value={row.value}
+                        onChange={(value) => update(row.id, { value })}
+                        variables={variables}
+                        placeholder={valuePlaceholder}
+                        className="h-7 border-0 !bg-transparent px-1 text-xs shadow-none focus-visible:ring-0"
+                      />
+                    ) : (
+                      <Input
+                        data-kv-row={row.id}
+                        data-kv-field="value"
+                        value={row.value}
+                        onChange={(event) =>
+                          update(row.id, { value: event.target.value })
+                        }
+                        placeholder={valuePlaceholder}
+                        className="h-7 border-0 !bg-transparent px-1 text-xs shadow-none focus-visible:ring-0"
+                      />
+                    )}
+                  </TableCell>
+                )}
+                <TableCell className="text-center">
+                  {isGhost ? null : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                      onClick={() => remove(row.id)}
+                      aria-label="Remove row"
+                    >
+                      <XIcon className="size-3" />
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }

@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-import { Editor, loader, type OnChange, type OnMount } from "@monaco-editor/react";
+import {
+  Editor,
+  loader,
+  type OnChange,
+  type OnMount,
+} from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
@@ -133,16 +138,26 @@ function normalizeCssColorForMonaco(cssColor: string): string {
 
 function applyBosonMonacoTheme(resolvedTheme: string | undefined): void {
   const isDark = resolvedTheme === "dark";
-  const bg = normalizeCssColorForMonaco(resolveCssBackgroundVariable("--background"));
+  const bg = normalizeCssColorForMonaco(
+    resolveCssBackgroundVariable("--background"),
+  );
+  // Surface keys that otherwise keep vs/vs-dark gray defaults next to our canvas.
+  const colors: Record<string, string> = {
+    "editor.background": bg,
+    "editorGutter.background": bg,
+    "minimap.background": bg,
+    "editorStickyScroll.background": bg,
+    "editorWidget.background": bg,
+    "editorSuggestWidget.background": bg,
+    "peekViewEditor.background": bg,
+    "peekViewResult.background": bg,
+    "peekViewTitle.background": bg,
+  };
   monaco.editor.defineTheme("boson", {
     base: isDark ? "vs-dark" : "vs",
     inherit: true,
     rules: [],
-    colors: {
-      "editor.background": bg,
-      "editorGutter.background": bg,
-      "minimap.background": bg,
-    },
+    colors,
   });
   monaco.editor.setTheme("boson");
 }
@@ -307,8 +322,8 @@ export function CodeEditor({
   return (
     <div
       className={cn(
-        "min-h-0 overflow-hidden",
-        embedded ? "" : "rounded-md border bg-card",
+        "min-h-0 overflow-hidden bg-background",
+        embedded ? "" : "rounded-md border",
         className,
       )}
     >

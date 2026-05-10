@@ -10,6 +10,14 @@ import { MethodBadge } from "@/components/method-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   CodeEditor,
   languageFromBody,
   languageFromContentType,
@@ -222,33 +230,28 @@ function HeadersTable({ headers }: { headers: Record<string, string> }) {
   }
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-[240px]" />
-          <col />
-        </colgroup>
-        <thead className="sticky top-0 z-10 bg-background">
-          <tr className="border-b text-[11px] font-medium text-muted-foreground">
-            <th className="py-2 pl-8 pr-4 text-left font-medium">Name</th>
-            <th className="py-2 pr-4 text-left font-medium">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(([key, value]) => (
-            <tr
-              key={key}
-              className="border-b border-border/40 last:border-b-0 hover:bg-muted/30"
-            >
-              <td className="break-all py-2 pl-8 pr-4 align-middle font-mono text-muted-foreground">
-                {key}
-              </td>
-              <td className="break-all py-2 pr-4 align-middle font-mono">
-                {value}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="m-3 ml-7 overflow-hidden rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[240px]">Name</TableHead>
+              <TableHead>Value</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entries.map(([key, value]) => (
+              <TableRow key={key}>
+                <TableCell className="whitespace-normal break-all text-muted-foreground">
+                  {key}
+                </TableCell>
+                <TableCell className="whitespace-normal break-all">
+                  {value}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -256,45 +259,39 @@ function HeadersTable({ headers }: { headers: Record<string, string> }) {
 function TimelineView({ item, status }: { item: HistoryItem; status: number }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-[240px]" />
-          <col className="w-[80px]" />
-          <col />
-          <col className="w-[140px]" />
-        </colgroup>
-        <thead className="sticky top-0 z-10 bg-background">
-          <tr className="border-b text-[11px] font-medium text-muted-foreground">
-            <th className="py-2 pl-8 pr-4 text-left font-medium">Status</th>
-            <th className="py-2 pr-4 text-left font-medium">Method</th>
-            <th className="py-2 pr-4 text-left font-medium">URL</th>
-            <th className="py-2 pr-4 text-left font-medium">When</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="border-b border-border/40 last:border-b-0 hover:bg-muted/30">
-            <td className="py-2 pl-8 pr-4 align-middle">
-              <span
+      <div className="m-3 ml-7 overflow-hidden rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[140px]">Status</TableHead>
+              <TableHead className="w-[80px]">Method</TableHead>
+              <TableHead>URL</TableHead>
+              <TableHead className="w-[140px]">When</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell
                 className={cn(
-                  "font-mono font-semibold tabular-nums",
+                  "font-semibold tabular-nums",
                   statusToTextClass(status),
                 )}
               >
                 {statusLabel(status)}
-              </span>
-            </td>
-            <td className="py-2 pr-4 align-middle">
-              <MethodBadge method={item.method} variant="text" />
-            </td>
-            <td className="truncate py-2 pr-4 align-middle font-mono">
-              {item.url}
-            </td>
-            <td className="py-2 pr-4 align-middle text-muted-foreground tabular-nums">
-              {relativeTime(item.created_at)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </TableCell>
+              <TableCell>
+                <MethodBadge method={item.method} variant="text" />
+              </TableCell>
+              <TableCell className="whitespace-normal break-all">
+                {item.url}
+              </TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">
+                {relativeTime(item.created_at)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
