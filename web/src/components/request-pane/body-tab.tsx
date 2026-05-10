@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FileTextIcon, PlusIcon, SparklesIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 
 import { KvEditor } from "@/components/kv-editor";
 import { VariableInput } from "@/components/variable-input";
@@ -7,21 +7,18 @@ import {
   CodeEditor,
   languageFromContentType,
 } from "@/components/ui/code-editor";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type {
   BodyForm,
@@ -31,22 +28,92 @@ import type {
 } from "@/lib/request-form";
 import type { ProjectVariables } from "@/lib/variables";
 
-const BODY_OPTIONS: { value: BodyKind; label: string; hint: string }[] = [
-  { value: "none", label: "None", hint: "no request body" },
-  { value: "text", label: "Raw", hint: "raw text with explicit content-type" },
-  { value: "json", label: "JSON", hint: "JSON body, validated and pretty-printed" },
-  { value: "form", label: "Form", hint: "application/x-www-form-urlencoded" },
-  { value: "multipart", label: "Multipart", hint: "multipart/form-data with files" },
-];
+const BODY_KIND_LABELS: Record<BodyKind, string> = {
+  none: "No Body",
+  text: "Text",
+  json: "JSON",
+  form: "Form URL Encoded",
+  multipart: "Multipart Form",
+};
 
-const COMMON_CONTENT_TYPES = [
-  "application/json",
-  "application/x-www-form-urlencoded",
-  "application/xml",
-  "text/plain",
-  "text/html",
-  "text/yaml",
-];
+/**
+ * Right-aligned toolbar surface for the Body tab. Lives in the request
+ * pane's tab strip so it sits inline with the tabs (Params / Body / …),
+ * not below them — matches Bruno's compact "actions on the right" layout.
+ */
+export function BodyTabToolbar({
+  body,
+  onChange,
+}: {
+  body: BodyForm;
+  onChange: (body: BodyForm) => void;
+}) {
+  function prettifyJson() {
+    const trimmed = body.json.rawText.trim();
+    if (!trimmed) return;
+    try {
+      const parsed = JSON.parse(trimmed);
+      onChange({ ...body, json: { rawText: JSON.stringify(parsed, null, 2) } });
+    } catch {
+      // ignore — invalid JSON is left as-is
+    }
+  }
+
+  const jsonIsValid = useMemo(() => {
+    const trimmed = body.json.rawText.trim();
+    if (!trimmed) return true;
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [body.json.rawText]);
+
+  return (
+    <div className="flex items-center gap-3">
+      {body.kind === "json" ? (
+        <button
+          type="button"
+          onClick={prettifyJson}
+          disabled={!jsonIsValid}
+          className="text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
+        >
+          Prettify
+        </button>
+      ) : null}
+
+      <Select
+        value={body.kind}
+        onValueChange={(value) =>
+          onChange({ ...body, kind: value as BodyKind })
+        }
+      >
+        <SelectTrigger className="h-7 gap-1.5 border-0 bg-transparent px-1.5 text-xs font-medium text-primary shadow-none focus-visible:ring-0 [&_svg]:text-primary">
+          <SelectValue>{BODY_KIND_LABELS[body.kind]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectGroup>
+            <SelectLabel>Form</SelectLabel>
+            <SelectItem value="multipart">Multipart Form</SelectItem>
+            <SelectItem value="form">Form URL Encoded</SelectItem>
+          </SelectGroup>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel>Raw</SelectLabel>
+            <SelectItem value="json">JSON</SelectItem>
+            <SelectItem value="text">Text</SelectItem>
+          </SelectGroup>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel>Other</SelectLabel>
+            <SelectItem value="none">No Body</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export function BodyTab({
   body,
@@ -59,209 +126,48 @@ export function BodyTab({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5">
-        <Select
-          value={body.kind}
-          onValueChange={(value) =>
-            onChange({ ...body, kind: value as BodyKind })
+      {body.kind === "none" ? <NoBodyState /> : null}
+      {body.kind === "json" ? (
+        <CodeEditor
+          language="json"
+          value={body.json.rawText}
+          onChange={(rawText) => onChange({ ...body, json: { rawText } })}
+          embedded
+          className="flex-1 border-0"
+        />
+      ) : null}
+      {body.kind === "text" ? (
+        <CodeEditor
+          language={languageFromContentType(body.text.contentType)}
+          value={body.text.value}
+          onChange={(value) =>
+            onChange({ ...body, text: { ...body.text, value } })
           }
-        >
-          <SelectTrigger className="h-8 min-w-[140px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {BODY_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                <div className="flex flex-col items-start">
-                  <span className="text-sm">{option.label}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {option.hint}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {body.kind === "text" ? (
-          <ContentTypeInput
-            value={body.text.contentType}
-            onChange={(contentType) =>
-              onChange({
-                ...body,
-                text: { ...body.text, contentType },
-              })
-            }
-          />
-        ) : null}
-
-        {body.kind === "json" ? (
-          <JsonToolbar body={body} onChange={onChange} />
-        ) : null}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        {body.kind === "none" ? <NoneState /> : null}
-        {body.kind === "text" ? (
-          <CodeEditor
-            language={languageFromContentType(body.text.contentType)}
-            value={body.text.value}
-            onChange={(value) =>
-              onChange({ ...body, text: { ...body.text, value } })
-            }
-            embedded
-            className="flex-1 border-0"
-          />
-        ) : null}
-        {body.kind === "json" ? (
-          <CodeEditor
-            language="json"
-            value={body.json.rawText}
-            onChange={(rawText) =>
-              onChange({ ...body, json: { rawText } })
-            }
-            embedded
-            className="flex-1 border-0"
-          />
-        ) : null}
-        {body.kind === "form" ? (
-          <FormBody
-            rows={body.form}
-            variables={variables}
-            onChange={(form) => onChange({ ...body, form })}
-          />
-        ) : null}
-        {body.kind === "multipart" ? (
-          <MultipartBody
-            fields={body.multipart}
-            variables={variables}
-            onChange={(multipart) => onChange({ ...body, multipart })}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function NoneState() {
-  return (
-    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-      <div className="text-center">
-        <FileTextIcon className="mx-auto mb-2 size-6 opacity-60" />
-        <p>This request has no body.</p>
-        <p className="text-xs opacity-80">
-          Pick a body type from the menu to add one.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ContentTypeInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        content-type
-      </span>
-      <Input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        list="boson-content-types"
-        placeholder="text/plain"
-        className="h-8 w-56 font-mono text-xs"
-      />
-      <datalist id="boson-content-types">
-        {COMMON_CONTENT_TYPES.map((type) => (
-          <option key={type} value={type} />
-        ))}
-      </datalist>
-    </div>
-  );
-}
-
-function JsonToolbar({
-  body,
-  onChange,
-}: {
-  body: BodyForm;
-  onChange: (body: BodyForm) => void;
-}) {
-  const validation = useMemo(() => {
-    const trimmed = body.json.rawText.trim();
-    if (!trimmed) return { kind: "empty" as const };
-    try {
-      JSON.parse(trimmed);
-      return { kind: "ok" as const };
-    } catch (error) {
-      return {
-        kind: "error" as const,
-        message: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }, [body.json.rawText]);
-
-  function format() {
-    const trimmed = body.json.rawText.trim();
-    if (!trimmed) return;
-    try {
-      const parsed = JSON.parse(trimmed);
-      onChange({
-        ...body,
-        json: { rawText: JSON.stringify(parsed, null, 2) },
-      });
-    } catch {
-      // Leave invalid JSON alone — surfaced via the badge.
-    }
-  }
-
-  return (
-    <div className="ml-auto flex items-center gap-2">
-      {validation.kind === "ok" ? (
-        <Badge
-          variant="secondary"
-          className="h-6 border-emerald-500/40 bg-emerald-500/10 px-2 text-[11px] text-emerald-700 dark:text-emerald-300"
-        >
-          valid
-        </Badge>
+          embedded
+          className="flex-1 border-0"
+        />
       ) : null}
-      {validation.kind === "error" ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="h-6 cursor-help border-rose-500/40 bg-rose-500/10 px-2 text-[11px] text-rose-700 dark:text-rose-300"
-            >
-              invalid
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-xs">
-            {validation.message}
-          </TooltipContent>
-        </Tooltip>
+      {body.kind === "form" ? (
+        <FormBody
+          rows={body.form}
+          variables={variables}
+          onChange={(form) => onChange({ ...body, form })}
+        />
       ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={format}
-            disabled={validation.kind !== "ok"}
-            aria-label="Format JSON"
-          >
-            <SparklesIcon className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Format JSON</TooltipContent>
-      </Tooltip>
+      {body.kind === "multipart" ? (
+        <MultipartBody
+          fields={body.multipart}
+          variables={variables}
+          onChange={(multipart) => onChange({ ...body, multipart })}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function NoBodyState() {
+  return (
+    <div className="px-7 py-3 text-xs text-muted-foreground">No Body</div>
   );
 }
 
@@ -275,22 +181,13 @@ function FormBody({
   onChange: (rows: KvRow[]) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 overflow-auto p-4">
-      <p className="text-xs text-muted-foreground">
-        Sent as
-        <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-          application/x-www-form-urlencoded
-        </code>
-        — values are URL-encoded automatically.
-      </p>
-      <KvEditor
-        rows={rows}
-        onChange={onChange}
-        variables={variables}
-        keyPlaceholder="Field"
-        valuePlaceholder="Value"
-      />
-    </div>
+    <KvEditor
+      rows={rows}
+      onChange={onChange}
+      variables={variables}
+      keyPlaceholder="Field"
+      valuePlaceholder="Value"
+    />
   );
 }
 
@@ -349,16 +246,8 @@ function MultipartBody({
 
   return (
     <div className="flex flex-col gap-3 overflow-auto p-4">
-      <p className="text-xs text-muted-foreground">
-        Sent as
-        <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-          multipart/form-data
-        </code>
-        — file paths are resolved relative to your project root at run time.
-      </p>
-
       {fields.length === 0 ? (
-        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           No fields yet — add a text or file field below.
         </p>
       ) : (
@@ -401,7 +290,7 @@ function MultipartBody({
                   onChange={(event) =>
                     update(field.id, { name: event.target.value })
                   }
-                  className="h-7 flex-1 font-mono text-xs"
+                  className="h-7 flex-1 text-xs"
                 />
                 <Button
                   type="button"
@@ -421,7 +310,7 @@ function MultipartBody({
                     onChange={(value) => update(field.id, { value })}
                     variables={variables}
                     placeholder="Value"
-                    className="h-8 font-mono text-xs"
+                    className="h-8 text-xs"
                   />
                 ) : (
                   <div className="grid gap-2 md:grid-cols-3">
@@ -430,7 +319,7 @@ function MultipartBody({
                       onChange={(path) => update(field.id, { path })}
                       variables={variables}
                       placeholder="./path/to/file.png"
-                      className="h-8 font-mono text-xs md:col-span-3"
+                      className="h-8 text-xs md:col-span-3"
                     />
                     <Input
                       value={field.fileName}
@@ -438,7 +327,7 @@ function MultipartBody({
                         update(field.id, { fileName: event.target.value })
                       }
                       placeholder="file name (optional)"
-                      className="h-8 font-mono text-xs"
+                      className="h-8 text-xs"
                     />
                     <Input
                       value={field.contentType}
@@ -446,7 +335,7 @@ function MultipartBody({
                         update(field.id, { contentType: event.target.value })
                       }
                       placeholder="content-type (optional)"
-                      className="h-8 font-mono text-xs md:col-span-2"
+                      className="h-8 text-xs md:col-span-2"
                     />
                   </div>
                 )}

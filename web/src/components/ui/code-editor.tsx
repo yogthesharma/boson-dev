@@ -340,7 +340,7 @@ export function CodeEditor({
           lineHeight: 20,
           fontFamily:
             "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-          minimap: { enabled: !minimal },
+          minimap: { enabled: false },
           scrollBeyondLastLine: false,
           smoothScrolling: true,
           tabSize: 2,

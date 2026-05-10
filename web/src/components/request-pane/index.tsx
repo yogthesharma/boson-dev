@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { ParamsTab } from "@/components/request-pane/params-tab";
 import { HeadersTab } from "@/components/request-pane/headers-tab";
-import { BodyTab } from "@/components/request-pane/body-tab";
+import { BodyTab, BodyTabToolbar } from "@/components/request-pane/body-tab";
 import { AuthTab } from "@/components/request-pane/auth-tab";
 import { OptionsTab } from "@/components/request-pane/options-tab";
 import { Tabs } from "@/components/ui/vercel-tabs";
@@ -55,12 +55,18 @@ export function RequestPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center px-4">
+      <div className="flex h-11 shrink-0 items-center gap-3 px-4">
         <Tabs
           tabs={TABS}
           activeTab={activeTab}
           onTabChange={(id) => setActiveTab(id as TabId)}
         />
+
+        {activeTab === "body" ? (
+          <div className="ml-auto">
+            <BodyTabToolbar body={body} onChange={onBodyChange} />
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
@@ -81,13 +87,11 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "body" ? (
-          <div className="flex h-full min-h-0 flex-col">
-            <BodyTab
-              body={body}
-              onChange={onBodyChange}
-              variables={variables}
-            />
-          </div>
+          <BodyTab
+            body={body}
+            onChange={onBodyChange}
+            variables={variables}
+          />
         ) : null}
 
         {activeTab === "auth" ? (
