@@ -1,0 +1,16 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node / Vite
+node_modules
+web/dist
+web/.vite
+*.log
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
