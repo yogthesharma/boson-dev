@@ -1,0 +1,14 @@
+{
+  "name": "boson-example-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tiny Fastify API used to exercise the Boson UI end-to-end.",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+environments:
+  - id: local
+    name: Local
+    variables:
+      base_url: http://127.0.0.1:4321
+      demo_user: alice
+
+requests: []

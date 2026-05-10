@@ -249,6 +249,9 @@ fn print_run_outcome(outcome: &crate::runner::RunOutcome, raw: bool) {
                 outcome.run.id,
                 run_status_label(&outcome.run.status)
             );
+            if let Some(error) = &outcome.run.error {
+                println!("error: {error}");
+            }
             return;
         }
     };

@@ -100,6 +100,24 @@ The `embed-ui` feature (default-on) causes `build.rs` to run `pnpm install` /
 `pnpm build` in `web/` and `rust-embed` bakes `web/dist/` into the binary.
 The resulting executable has no Node runtime requirement.
 
+## Try the example workspace
+
+A complete playground lives in `example/`: a Fastify HTTP server plus a
+pre-seeded Boson project that targets it. End-to-end test in two terminals:
+
+```bash
+# terminal 1: start the demo API on http://127.0.0.1:4321
+cd example/server
+pnpm install
+pnpm dev
+
+# terminal 2: serve the Boson UI against ./example
+cargo run -- dev --project-dir example
+```
+
+See [`example/README.md`](example/README.md) for the full walkthrough,
+including the bearer-token / secrets demo.
+
 ## API
 
 The Rust server owns `/api/*`. Initial endpoints:
