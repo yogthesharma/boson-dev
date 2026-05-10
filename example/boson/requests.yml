@@ -1,98 +1,92 @@
 environments: []
-
 requests:
-  - id: health
-    name: Health check
-    folder: System
-    method: GET
-    url: "{{base_url}}/health"
-    headers:
-      accept: application/json
-
-  - id: list-todos
-    name: List todos
-    folder: Todos
-    method: GET
-    url: "{{base_url}}/todos"
-    headers:
-      accept: application/json
-
-  - id: list-pending-todos
-    name: List pending todos
-    folder: Todos
-    method: GET
-    url: "{{base_url}}/todos"
-    query:
-      done: "false"
-    headers:
-      accept: application/json
-
-  - id: get-todo
-    name: Get todo by id
-    folder: Todos
-    method: GET
-    url: "{{base_url}}/todos/1"
-    headers:
-      accept: application/json
-
-  - id: create-todo
-    name: Create todo
-    folder: Todos
-    method: POST
-    url: "{{base_url}}/todos"
-    headers:
-      accept: application/json
-      content-type: application/json
-    body:
-      kind: json
-      value:
-        title: Wire up Boson against Fastify
-        done: false
-
-  - id: toggle-todo
-    name: Toggle todo done
-    folder: Todos
-    method: PATCH
-    url: "{{base_url}}/todos/1"
-    headers:
-      accept: application/json
-      content-type: application/json
-    body:
-      kind: json
-      value:
-        done: true
-
-  - id: delete-todo
-    name: Delete todo
-    folder: Todos
-    method: DELETE
-    url: "{{base_url}}/todos/2"
-    headers:
-      accept: application/json
-
-  - id: echo
-    name: Echo (json)
-    folder: Diagnostics
-    method: POST
-    url: "{{base_url}}/echo"
-    headers:
-      accept: application/json
-      content-type: application/json
-    query:
-      from: "{{demo_user}}"
-    body:
-      kind: json
-      value:
-        hello: world
-        from: "{{demo_user}}"
-
-  - id: secure
-    name: Secure (bearer)
-    folder: Auth
-    method: GET
-    url: "{{base_url}}/secure"
-    headers:
-      accept: application/json
-    auth:
-      kind: bearer
-      token: "{{secret:DEMO_TOKEN}}"
+- id: health
+  name: Health check
+  folder: System
+  method: GET
+  url: '{{base_url}}/health'
+  headers:
+    accept: application/json
+- id: list-todos
+  name: List todos
+  folder: Todos
+  method: GET
+  url: '{{base_url}}/todos'
+  headers:
+    accept: application/json
+- id: list-pending-todos
+  name: List pending todos
+  folder: Todos
+  method: GET
+  url: '{{base_url}}/todos'
+  headers:
+    accept: application/json
+  query:
+    done: 'false'
+- id: get-todo
+  name: Get todo by id
+  folder: Todos
+  method: GET
+  url: '{{base_url}}/todos/1'
+  headers:
+    accept: application/json
+- id: create-todo
+  name: Create todoo
+  folder: Todos
+  method: POST
+  url: '{{base_url}}/todos'
+  headers:
+    accept: application/json
+    content-type: application/json
+  body: |-
+    {
+      "kind": "json",
+      "value": {
+        "done": false,
+        "title": "Wire up Boson against Fastify"
+      }
+    }
+- id: toggle-todo
+  name: Toggle todo done
+  folder: Todos
+  method: PATCH
+  url: '{{base_url}}/todos/1'
+  headers:
+    accept: application/json
+    content-type: application/json
+  body:
+    kind: json
+    value:
+      done: true
+- id: delete-todo
+  name: Delete todo
+  folder: Todos
+  method: DELETE
+  url: '{{base_url}}/todos/2'
+  headers:
+    accept: application/json
+- id: echo
+  name: Echo (json)
+  folder: Diagnostics
+  method: POST
+  url: '{{base_url}}/echo'
+  headers:
+    accept: application/json
+    content-type: application/json
+  query:
+    from: '{{demo_user}}'
+  body:
+    kind: json
+    value:
+      from: '{{demo_user}}'
+      hello: world
+- id: secure
+  name: Secure (bearer)
+  folder: Auth
+  method: GET
+  url: '{{base_url}}/secure'
+  headers:
+    accept: application/json
+  auth:
+    kind: bearer
+    token: '{{secret:DEMO_TOKEN}}'

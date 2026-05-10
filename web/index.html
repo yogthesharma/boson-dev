@@ -4,19 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Boson</title>
-    <script>
-      // Set theme before paint to avoid a flash.
-      (function () {
-        try {
-          var stored = localStorage.getItem("boson-theme");
-          var prefersDark = window.matchMedia(
-            "(prefers-color-scheme: dark)",
-          ).matches;
-          var dark = stored ? stored === "dark" : prefersDark;
-          document.documentElement.classList.toggle("dark", dark);
-        } catch {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,102 +1,23 @@
-//! SQLite-backed local state. Holds a normalized projection of the YAML
-//! project plus runtime state: drafts, in-flight runs, request history, and
-//! encrypted secrets.
+//! `Store` — the thin repository layer over SQLite.
 //!
-//! YAML files remain the source of truth; this DB is a safety + speed layer
-//! that the UI talks to directly. The watcher refreshes the projection on
-//! every YAML change.
+//! All public methods open a fresh connection, run their work, and return.
+//! That keeps the API thread-safe by construction at the cost of opening
+//! the file per call; SQLite is fast enough for the sizes Boson handles.
 
 use std::path::Path;
 
 use anyhow::Context;
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::{Deserialize, Serialize};
 
 use crate::config::{ApiRequest, Environment, ProjectSnapshot};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectView {
-    pub name: String,
-    pub schema_version: u16,
-    pub environments: Vec<Environment>,
-    pub requests: Vec<ApiRequest>,
-    pub drafts: Vec<Draft>,
-    pub secret_names: Vec<String>,
-    /// Drafts whose source request was edited externally since the draft was
-    /// created. The UI should warn before saving these.
-    pub stale_drafts: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Draft {
-    pub request_id: String,
-    pub request: ApiRequest,
-    pub updated_at: String,
-    /// Hash of the canonical source request at the time the draft was last
-    /// edited. Used to detect drift if YAML changes underneath.
-    pub base_hash: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResponseHistory {
-    pub id: i64,
-    pub run_id: String,
-    pub request_id: String,
-    pub environment_id: Option<String>,
-    pub method: String,
-    pub url: String,
-    pub status: Option<u16>,
-    pub duration_ms: u128,
-    pub response_headers: serde_json::Value,
-    pub response_body: String,
-    pub response_truncated: bool,
-    pub error: Option<String>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunStatus {
-    Pending,
-    Running,
-    Completed,
-    Failed,
-    Canceled,
-}
-
-impl RunStatus {
-    fn as_str(&self) -> &'static str {
-        match self {
-            RunStatus::Pending => "pending",
-            RunStatus::Running => "running",
-            RunStatus::Completed => "completed",
-            RunStatus::Failed => "failed",
-            RunStatus::Canceled => "canceled",
-        }
-    }
-    fn parse(s: &str) -> Self {
-        match s {
-            "running" => RunStatus::Running,
-            "completed" => RunStatus::Completed,
-            "failed" => RunStatus::Failed,
-            "canceled" => RunStatus::Canceled,
-            _ => RunStatus::Pending,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Run {
-    pub id: String,
-    pub request_id: String,
-    pub environment_id: Option<String>,
-    pub status: RunStatus,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub history_id: Option<i64>,
-    pub error: Option<String>,
-}
+use super::migrations::migrate;
+use super::rows::{
+    collect_rows, json_err_to_sql, row_to_draft, row_to_environment, row_to_history, row_to_run,
+    source_hash,
+};
+use super::types::{Draft, NewHistory, ProjectView, ResponseHistory, Run, RunStatus};
 
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -390,8 +311,6 @@ impl Store {
         })
     }
 
-    // --------- secrets (encrypted blobs) ---------
-
     pub fn upsert_secret(&self, name: &str, ciphertext: &[u8]) -> anyhow::Result<()> {
         self.with_conn(|conn| {
             conn.execute(
@@ -437,98 +356,6 @@ impl Store {
             .with_context(|| format!("failed to open SQLite DB {}", self.path.display()))?;
         f(&mut conn)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct NewHistory {
-    pub run_id: String,
-    pub request_id: String,
-    pub environment_id: Option<String>,
-    pub method: String,
-    pub url: String,
-    pub status: Option<u16>,
-    pub duration_ms: u128,
-    pub response_headers: serde_json::Value,
-    pub response_body: String,
-    pub response_truncated: bool,
-    pub error: Option<String>,
-}
-
-fn migrate(conn: &mut Connection) -> anyhow::Result<()> {
-    conn.execute_batch(
-        r#"
-        PRAGMA foreign_keys = ON;
-
-        CREATE TABLE IF NOT EXISTS schema_version (
-            version INTEGER PRIMARY KEY
-        );
-
-        CREATE TABLE IF NOT EXISTS project_snapshot (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            name TEXT NOT NULL,
-            schema_version INTEGER NOT NULL,
-            raw_json TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS environments (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            variables_json TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS requests (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            raw_json TEXT NOT NULL,
-            source_hash TEXT NOT NULL,
-            source_path TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS drafts (
-            request_id TEXT PRIMARY KEY,
-            draft_json TEXT NOT NULL,
-            base_hash TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS runs (
-            id TEXT PRIMARY KEY,
-            request_id TEXT NOT NULL,
-            environment_id TEXT,
-            status TEXT NOT NULL,
-            started_at TEXT NOT NULL,
-            finished_at TEXT,
-            history_id INTEGER,
-            error TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT NOT NULL,
-            request_id TEXT NOT NULL,
-            environment_id TEXT,
-            method TEXT NOT NULL,
-            url TEXT NOT NULL,
-            status INTEGER,
-            duration_ms INTEGER NOT NULL,
-            response_headers_json TEXT NOT NULL,
-            response_body TEXT NOT NULL,
-            response_truncated INTEGER NOT NULL DEFAULT 0,
-            error TEXT,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS secrets (
-            name TEXT PRIMARY KEY,
-            ciphertext BLOB NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        INSERT OR IGNORE INTO schema_version(version) VALUES (1);
-        "#,
-    )?;
-    Ok(())
 }
 
 fn list_environments(conn: &mut Connection) -> anyhow::Result<Vec<Environment>> {
@@ -631,86 +458,4 @@ fn get_run(conn: &mut Connection, id: &str) -> anyhow::Result<Option<Run>> {
     )
     .optional()
     .map_err(Into::into)
-}
-
-fn row_to_environment(row: &rusqlite::Row<'_>) -> rusqlite::Result<Environment> {
-    let variables_json: String = row.get(2)?;
-    Ok(Environment {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        variables: serde_json::from_str(&variables_json).unwrap_or_default(),
-    })
-}
-
-fn row_to_draft(row: &rusqlite::Row<'_>) -> rusqlite::Result<Draft> {
-    let draft_json: String = row.get(1)?;
-    Ok(Draft {
-        request_id: row.get(0)?,
-        request: serde_json::from_str(&draft_json).map_err(json_err_to_sql)?,
-        base_hash: row.get(2)?,
-        updated_at: row.get(3)?,
-    })
-}
-
-fn row_to_history(row: &rusqlite::Row<'_>) -> rusqlite::Result<ResponseHistory> {
-    let headers_json: String = row.get(8)?;
-    let status: Option<u16> = row.get(6)?;
-    let duration_ms: i64 = row.get(7)?;
-    let truncated: i64 = row.get(10)?;
-    Ok(ResponseHistory {
-        id: row.get(0)?,
-        run_id: row.get(1)?,
-        request_id: row.get(2)?,
-        environment_id: row.get(3)?,
-        method: row.get(4)?,
-        url: row.get(5)?,
-        status,
-        duration_ms: u128::try_from(duration_ms).unwrap_or_default(),
-        response_headers: serde_json::from_str(&headers_json).unwrap_or(serde_json::Value::Null),
-        response_body: row.get(9)?,
-        response_truncated: truncated != 0,
-        error: row.get(11)?,
-        created_at: row.get(12)?,
-    })
-}
-
-fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<Run> {
-    let status: String = row.get(3)?;
-    Ok(Run {
-        id: row.get(0)?,
-        request_id: row.get(1)?,
-        environment_id: row.get(2)?,
-        status: RunStatus::parse(&status),
-        started_at: row.get(4)?,
-        finished_at: row.get(5)?,
-        history_id: row.get(6)?,
-        error: row.get(7)?,
-    })
-}
-
-fn collect_rows<T>(
-    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>>,
-) -> anyhow::Result<Vec<T>> {
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
-    }
-    Ok(out)
-}
-
-fn json_err_to_sql(err: serde_json::Error) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(err))
-}
-
-/// FNV-1a 64-bit hex used for cheap drift detection between the canonical
-/// request (from YAML) and the draft's view of it. We don't need cryptographic
-/// strength here, just stable change detection.
-fn source_hash(input: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    for byte in input.as_bytes() {
-        hash ^= *byte as u64;
-        hash = hash.wrapping_mul(PRIME);
-    }
-    format!("{hash:016x}")
 }
