@@ -1,27 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { bodyToText, headersToText, textToHeaders } from "@/lib/format";
+import {
+  EMPTY_FORM,
+  formToRequest,
+  requestToForm,
+  type AuthForm,
+  type BodyForm,
+  type KvRow,
+  type OptionsForm,
+  type RequestForm,
+} from "@/lib/request-form";
 import type { ApiRequest, Draft, ProjectView } from "@/types";
 
-const EMPTY_REQUEST: ApiRequest = {
-  id: "",
-  name: "",
-  method: "GET",
-  url: "",
-  headers: {},
-  body: "",
-};
-
 export interface UseCurrentRequestResult {
-  form: ApiRequest;
-  setForm: (request: ApiRequest) => void;
-  headersText: string;
-  setHeadersText: (text: string) => void;
-  bodyText: string;
-  setBodyText: (text: string) => void;
+  form: RequestForm;
+  setForm: (next: RequestForm) => void;
+  patchForm: (patch: Partial<RequestForm>) => void;
+  setQuery: (query: KvRow[]) => void;
+  setHeaders: (headers: KvRow[]) => void;
+  setBody: (body: BodyForm) => void;
+  setAuth: (auth: AuthForm) => void;
+  setOptions: (options: OptionsForm) => void;
   selectedDraft: Draft | undefined;
   selectedCanonical: ApiRequest | undefined;
   isStaleDraft: boolean;
+  hasUnsavedChanges: boolean;
   draftRequest: () => ApiRequest;
 }
 
@@ -29,12 +32,12 @@ export function useCurrentRequest(
   project: ProjectView | null,
   selectedRequestId: string,
 ): UseCurrentRequestResult {
-  const [form, setForm] = useState<ApiRequest>(EMPTY_REQUEST);
-  const [headersText, setHeadersText] = useState("");
-  const [bodyText, setBodyText] = useState("");
+  const [form, setForm] = useState<RequestForm>(EMPTY_FORM);
+  const [baseline, setBaseline] = useState<RequestForm>(EMPTY_FORM);
 
   const selectedDraft = useMemo(
-    () => project?.drafts.find((draft) => draft.request_id === selectedRequestId),
+    () =>
+      project?.drafts.find((draft) => draft.request_id === selectedRequestId),
     [project?.drafts, selectedRequestId],
   );
 
@@ -49,31 +52,75 @@ export function useCurrentRequest(
     return (project.stale_drafts ?? []).includes(selectedRequestId);
   }, [project, selectedRequestId]);
 
-  useEffect(() => {
-    const next = selectedDraft?.request ?? selectedCanonical ?? EMPTY_REQUEST;
-    setForm(next);
-    setHeadersText(headersToText(next.headers));
-    setBodyText(bodyToText(next.body));
-  }, [selectedCanonical, selectedDraft]);
+  // When the selection or upstream data changes, snap the form back to the
+  // canonical/draft representation. Comparing serialized JSON detects
+  // meaningful schema changes without thrashing on identity-only differences.
+  const incomingKey = useMemo(() => {
+    const incoming = selectedDraft?.request ?? selectedCanonical;
+    if (!incoming) return "::empty";
+    return `${selectedRequestId}::${
+      selectedDraft ? "draft" : "canonical"
+    }::${JSON.stringify(incoming)}`;
+  }, [selectedDraft, selectedCanonical, selectedRequestId]);
 
-  function draftRequest(): ApiRequest {
-    return {
-      ...form,
-      headers: textToHeaders(headersText),
-      body: bodyText,
-    };
-  }
+  useEffect(() => {
+    const incoming = selectedDraft?.request ?? selectedCanonical;
+    const next = incoming ? requestToForm(incoming) : EMPTY_FORM;
+    setForm(next);
+    setBaseline(next);
+  }, [incomingKey, selectedDraft, selectedCanonical]);
+
+  const patchForm = useCallback((patch: Partial<RequestForm>) => {
+    setForm((current) => ({ ...current, ...patch }));
+  }, []);
+
+  const setQuery = useCallback(
+    (query: KvRow[]) => setForm((current) => ({ ...current, query })),
+    [],
+  );
+  const setHeaders = useCallback(
+    (headers: KvRow[]) => setForm((current) => ({ ...current, headers })),
+    [],
+  );
+  const setBody = useCallback(
+    (body: BodyForm) => setForm((current) => ({ ...current, body })),
+    [],
+  );
+  const setAuth = useCallback(
+    (auth: AuthForm) => setForm((current) => ({ ...current, auth })),
+    [],
+  );
+  const setOptions = useCallback(
+    (options: OptionsForm) => setForm((current) => ({ ...current, options })),
+    [],
+  );
+
+  const draftRequest = useCallback(() => formToRequest(form), [form]);
+
+  const hasUnsavedChanges = useMemo(
+    () => !formsEqual(form, baseline),
+    [form, baseline],
+  );
 
   return {
     form,
     setForm,
-    headersText,
-    setHeadersText,
-    bodyText,
-    setBodyText,
+    patchForm,
+    setQuery,
+    setHeaders,
+    setBody,
+    setAuth,
+    setOptions,
     selectedDraft,
     selectedCanonical,
     isStaleDraft,
+    hasUnsavedChanges,
     draftRequest,
   };
+}
+
+function formsEqual(a: RequestForm, b: RequestForm): boolean {
+  // Cheap structural equality: stable JSON works because every field is
+  // either a primitive, a plain object or a row array with stable keys.
+  return JSON.stringify(a) === JSON.stringify(b);
 }

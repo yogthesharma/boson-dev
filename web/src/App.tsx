@@ -3,12 +3,18 @@ import {
   BootstrapErrorScreen,
   LoadingScreen,
 } from "@/components/boot-states";
-import { RequestEditor } from "@/components/request-editor";
-import { ResponsePanel } from "@/components/response-panel";
-import { StaleDraftBanner } from "@/components/stale-draft-banner";
-import { WorkspaceTopbar } from "@/components/workspace-topbar";
+import { RequestBar } from "@/components/request-bar";
+import { RequestPane } from "@/components/request-pane";
+import { ResponsePane } from "@/components/response-pane";
+import { WorkspaceHeader } from "@/components/workspace-header";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useCurrentRequest } from "@/hooks/use-current-request";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useProject } from "@/hooks/use-project";
 import { useRequestActions } from "@/hooks/use-request-actions";
 
@@ -27,13 +33,15 @@ export function App() {
 
   const {
     form,
-    setForm,
-    headersText,
-    setHeadersText,
-    bodyText,
-    setBodyText,
+    setQuery,
+    setHeaders,
+    setBody,
+    setAuth,
+    setOptions,
+    patchForm,
     selectedDraft,
     isStaleDraft,
+    hasUnsavedChanges,
     draftRequest,
   } = useCurrentRequest(project, selectedRequestId);
 
@@ -45,6 +53,11 @@ export function App() {
       refresh,
     });
 
+  useKeyboardShortcuts({
+    onRun: selectedRequestId && !running ? runSelectedRequest : undefined,
+    onSave: selectedRequestId ? saveDraft : undefined,
+  });
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -52,6 +65,10 @@ export function App() {
   if (bootstrapError && !project) {
     return <BootstrapErrorScreen message={bootstrapError} />;
   }
+
+  const latestForRequest = history.find(
+    (item) => item.request_id === selectedRequestId,
+  );
 
   return (
     <SidebarProvider>
@@ -63,34 +80,56 @@ export function App() {
         onSelectRequest={setSelectedRequestId}
         onSelectEnvironment={setSelectedEnvironmentId}
       />
-      <SidebarInset>
-        <WorkspaceTopbar
-          method={form.method}
-          name={form.name}
+      <SidebarInset className="flex h-svh min-h-0 flex-col overflow-hidden">
+        <WorkspaceHeader
+          workspaceName={project?.name ?? "Boson"}
+          folder={form.folder || null}
+          requestName={form.name}
           hasDraft={Boolean(selectedDraft)}
-          running={running}
-          canRun={Boolean(selectedRequestId)}
-          onRun={runSelectedRequest}
+          isStale={isStaleDraft}
+          hasUnsavedChanges={hasUnsavedChanges}
+          canAct={Boolean(selectedRequestId)}
+          onNameChange={(name) => patchForm({ name })}
+          onSaveToYaml={saveToYaml}
+          onDiscardDraft={discardDraft}
         />
 
-        <section className="flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-6">
-          {isStaleDraft ? <StaleDraftBanner /> : null}
+        <RequestBar
+          method={form.method}
+          url={form.url}
+          running={running}
+          canRun={Boolean(selectedRequestId)}
+          hasDraft={Boolean(selectedDraft)}
+          hasUnsavedChanges={hasUnsavedChanges}
+          onMethodChange={(method) => patchForm({ method })}
+          onUrlChange={(url) => patchForm({ url })}
+          onRun={runSelectedRequest}
+          onSaveDraft={saveDraft}
+        />
 
-          <RequestEditor
-            form={form}
-            onFormChange={setForm}
-            headersText={headersText}
-            onHeadersTextChange={setHeadersText}
-            bodyText={bodyText}
-            onBodyTextChange={setBodyText}
-            hasDraft={Boolean(selectedDraft)}
-            onSaveDraft={saveDraft}
-            onSaveToYaml={saveToYaml}
-            onDiscardDraft={discardDraft}
-          />
-
-          <ResponsePanel item={history[0]} />
-        </section>
+        <ResizablePanelGroup
+          orientation="vertical"
+          className="min-h-0 flex-1"
+        >
+          <ResizablePanel defaultSize={48} minSize={20}>
+            <RequestPane
+              query={form.query}
+              headers={form.headers}
+              body={form.body}
+              auth={form.auth}
+              options={form.options}
+              onQueryChange={setQuery}
+              onHeadersChange={setHeaders}
+              onBodyChange={setBody}
+              onAuthChange={setAuth}
+              onOptionsChange={setOptions}
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={52} minSize={20}>
+            <ResponsePane item={latestForRequest} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </SidebarInset>
     </SidebarProvider>
   );

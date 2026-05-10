@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 
 import { App } from "./App";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./index.css";
 
 const rootElement = document.getElementById("root");
@@ -20,8 +21,10 @@ createRoot(rootElement).render(
       storageKey="boson-theme"
       disableTransitionOnChange
     >
-      <App />
-      <Toaster richColors />
+      <TooltipProvider delayDuration={300}>
+        <App />
+        <Toaster richColors />
+      </TooltipProvider>
     </ThemeProvider>
   </StrictMode>,
 );

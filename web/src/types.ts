@@ -1,3 +1,5 @@
+// API-shaped types. These mirror the Rust schema in src/config and src/db.
+
 export interface ProjectView {
   name: string;
   schema_version: number;
@@ -14,6 +16,51 @@ export interface Environment {
   variables: Record<string, string>;
 }
 
+export type ApiKeyLocation = "header" | "query";
+
+export type Auth =
+  | { kind: "bearer"; token: string }
+  | { kind: "basic"; username: string; password: string }
+  | { kind: "api_key"; name: string; value: string; location?: ApiKeyLocation }
+  | { kind: "oauth2"; token?: string | null };
+
+export interface MultipartFieldText {
+  name: string;
+  kind: "text";
+  value: string;
+}
+
+export interface MultipartFieldFile {
+  name: string;
+  kind: "file";
+  path: string;
+  content_type?: string | null;
+  file_name?: string | null;
+}
+
+export type MultipartField = MultipartFieldText | MultipartFieldFile;
+
+/**
+ * The wire shape of a request body. Matches the custom serde in
+ * `src/config/body.rs`: a plain string is shorthand for a `text` body
+ * with no content-type override.
+ */
+export type RequestBody =
+  | null
+  | string
+  | { kind: "text"; content_type?: string | null; value: string }
+  | { kind: "json"; value: unknown }
+  | { kind: "form"; fields: Record<string, string> }
+  | { kind: "multipart"; fields: MultipartField[] };
+
+export interface RequestOptions {
+  timeout_ms?: number;
+  follow_redirects?: boolean;
+  max_redirects?: number;
+  max_response_bytes?: number;
+  cookies?: boolean;
+}
+
 export interface ApiRequest {
   id: string;
   name: string;
@@ -21,7 +68,10 @@ export interface ApiRequest {
   method: string;
   url: string;
   headers: Record<string, string>;
-  body?: unknown;
+  query?: Record<string, string>;
+  auth?: Auth | null;
+  body?: RequestBody;
+  options?: RequestOptions;
 }
 
 export interface Draft {
@@ -40,6 +90,7 @@ export interface HistoryItem {
   duration_ms: number;
   response_headers: Record<string, string>;
   response_body: string;
+  response_truncated?: boolean;
   error?: string | null;
   created_at: string;
 }
