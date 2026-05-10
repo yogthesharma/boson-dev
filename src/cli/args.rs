@@ -99,15 +99,21 @@ pub struct LintArgs {
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    /// `<owner>/<repo>` GitHub slug to look for releases in.
+    /// `<owner>/<repo>` GitHub slug to look for releases in. Defaults to the
+    /// repository the binary was built from.
     #[arg(long, env = "BOSON_UPDATE_REPO")]
     pub repo: Option<String>,
 
-    /// Asset name pattern to download (defaults to `boson-<target>.tar.gz`).
+    /// Asset name to download (defaults to `boson-<target>.tar.gz`, or
+    /// `boson-<target>.zip` on Windows).
     #[arg(long, env = "BOSON_UPDATE_ASSET")]
     pub asset_name: Option<String>,
 
-    /// Print the available release without applying it.
-    #[arg(long)]
-    pub dry_run: bool,
+    /// Print the latest available release without downloading or installing it.
+    #[arg(long, visible_alias = "dry-run")]
+    pub check: bool,
+
+    /// Skip the interactive "Download and install?" confirmation prompt.
+    #[arg(long, short = 'y')]
+    pub yes: bool,
 }

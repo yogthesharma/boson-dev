@@ -11,7 +11,8 @@
 
 - [Features](#features)
 - [How it works](#how-it-works)
-- [Install from source](#install-from-source)
+- [Install](#install)
+- [Updates](#updates)
 - [Quick start](#quick-start)
 - [Development workflows](#development-workflows)
 - [Project layout (on disk)](#project-layout-on-disk)
@@ -60,17 +61,41 @@ There is **no requirement for any Boson-hosted backend**. The only “server” 
 
 ---
 
-## Install from source
+## Install
+
+### Quick install (macOS & Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yogthesharma/boson-dev/main/install.sh | bash
+```
+
+This downloads the right binary for your platform from the [latest GitHub release](https://github.com/yogthesharma/boson-dev/releases/latest), verifies its checksum, and drops it at **`~/.local/bin/boson`**. If that directory isn't on your `PATH` yet, the script tells you the exact line to add to your shell rc.
+
+**Pinning or customising:**
+
+```bash
+# install a specific version
+curl -fsSL https://raw.githubusercontent.com/yogthesharma/boson-dev/main/install.sh \
+  | BOSON_VERSION=v0.1.0 bash
+
+# install somewhere on $PATH
+curl -fsSL https://raw.githubusercontent.com/yogthesharma/boson-dev/main/install.sh \
+  | BOSON_INSTALL_DIR=/usr/local/bin bash
+```
+
+### Windows
+
+Grab the matching `.zip` from the [releases page](https://github.com/yogthesharma/boson-dev/releases/latest), unzip it, and put `boson.exe` anywhere on your `PATH`.
+
+### Build from source
 
 **Prerequisites**
 
 - **Rust** (current stable; nightly is fine)
 - **Node 20+** and **pnpm** (for building the web UI; not needed to *run* a release binary that already embeds the UI)
 
-**Build a release binary (UI embedded by default via the `embed-ui` feature):**
-
 ```bash
-git clone <your-fork-or-upstream-url> boson
+git clone https://github.com/yogthesharma/boson-dev boson
 cd boson
 pnpm install --dir web
 cargo build --release
@@ -78,8 +103,30 @@ cargo build --release
 
 The binary is at `target/release/boson`.
 
-- Use **`cargo build --no-default-features`** to skip the `pnpm build` step in `build.rs` when you are only iterating on Rust (faster; you must build the web app yourself if you need a UI in the binary).
+- Use **`cargo build --no-default-features`** to skip the `pnpm build` step in `build.rs` when you are only iterating on Rust.
 - Set **`BOSON_SKIP_WEB_BUILD=1`** during `cargo build` if you already have `web/dist` and want to skip the UI build step (see [Environment variables](#environment-variables)).
+
+---
+
+## Updates
+
+Boson is its own updater. Once installed, ask for the latest release:
+
+```bash
+boson update           # show current vs latest, prompt, then install
+boson update --check   # just tell me what's available, don't install
+boson update --yes     # install non-interactively (good for scripts)
+```
+
+By default the command checks `yogthesharma/boson-dev` on GitHub. Override the source for forks or private mirrors:
+
+```bash
+boson update --repo my-org/boson-fork
+# or persist it:
+export BOSON_UPDATE_REPO=my-org/boson-fork
+```
+
+`boson update` reuses the same release artifacts as `install.sh`, so whichever you used to get on the train, the other one will keep you moving.
 
 ---
 
@@ -233,7 +280,7 @@ boson/
 | **`boson serve`** | **Production** mode: serve **embedded** UI from the binary + API |
 | **`boson run <request_id>`** | Run one request; optional `--environment`, `--raw` |
 | **`boson lint` / `boson check`** | Validate YAML |
-| **`boson update`** | Self-update from GitHub releases (optional config via env) |
+| **`boson update`** | Self-update from GitHub releases (`--check`, `--yes`, `--repo <owner>/<name>`) |
 
 Global defaults: `--project-dir` usually defaults to **`.`**; server bind defaults to **`127.0.0.1:8787`**.
 
@@ -275,7 +322,8 @@ Non-`/api/*` requests are handled by the **UI** (embedded files in release, or *
 | **`BOSON_PNPM`** | `build.rs` | Override `pnpm` binary path |
 | **`BOSON_API_URL`** | `web` dev | Vite proxy target for `/api` (default `http://127.0.0.1:8787`) |
 | **`VITE_DEV_PORT`** | `web` dev | Vite listen port (default `5173`) |
-| **`BOSON_UPDATE_REPO`**, **`BOSON_UPDATE_ASSET`** | `boson update` | Self-update source configuration |
+| **`BOSON_UPDATE_REPO`**, **`BOSON_UPDATE_ASSET`** | `boson update` | Self-update source (defaults to `yogthesharma/boson-dev` and `boson-<target>.tar.gz`/`.zip`) |
+| **`BOSON_VERSION`**, **`BOSON_INSTALL_DIR`**, **`BOSON_INSTALL_REPO`** | `install.sh` | Pin version, install destination, or source repo for the curl-pipe installer |
 
 ---
 
