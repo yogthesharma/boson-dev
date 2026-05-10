@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 fn main() -> Result<()> {
     // Only do work when the UI is being embedded.
@@ -23,9 +23,8 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let manifest_dir = PathBuf::from(
-        std::env::var("CARGO_MANIFEST_DIR").context("CARGO_MANIFEST_DIR not set")?,
-    );
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").context("CARGO_MANIFEST_DIR not set")?);
     let web_dir = manifest_dir.join("web");
 
     // Tell cargo to rerun this script when the web sources change.

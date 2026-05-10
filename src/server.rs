@@ -1,20 +1,35 @@
+//! Axum HTTP server. Owns `/api/*`, falls through to the embedded UI (or the
+//! Vite dev proxy) for everything else.
+//!
+//! The server is a thin layer on top of `Store` (SQLite) and `SecretManager`.
+//! The watcher refreshes the SQLite projection whenever YAML files change on
+//! disk.
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
 
 use anyhow::Context;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Json};
+use axum::routing::{get, post};
 use axum::Router;
-use axum::extract::State;
-use axum::response::Json;
-use axum::routing::get;
-use serde_json::{Value, json};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use tokio::process::{Child, Command};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::assets;
+use crate::config::ApiRequest;
+use crate::db::{Draft, ProjectView, ResponseHistory, Run, Store};
+use crate::project::{self, ProjectPaths};
 use crate::proxy;
+use crate::runner::{self, RunContext, RunRegistry, RunRequestInput};
+use crate::secrets::SecretManager;
+use crate::watcher::{self, ProjectWatcher};
 
 #[derive(Clone, Debug)]
 pub enum ServerMode {
@@ -31,11 +46,37 @@ pub enum ServerMode {
 #[derive(Clone)]
 pub struct AppState {
     pub mode: ServerMode,
+    pub paths: ProjectPaths,
+    pub store: Store,
+    pub secrets: SecretManager,
+    pub registry: RunRegistry,
 }
 
-pub async fn run(addr: SocketAddr, mode: ServerMode, open_browser: bool) -> anyhow::Result<()> {
-    // In dev mode, optionally spawn `pnpm dev` and wait for Vite to be ready
-    // before we accept connections. This keeps the UX "boson dev → page works".
+impl AppState {
+    fn run_context(&self) -> RunContext {
+        RunContext {
+            store: self.store.clone(),
+            secrets: self.secrets.clone(),
+            registry: self.registry.clone(),
+            project_root: self.paths.root.clone(),
+        }
+    }
+}
+
+pub async fn run(
+    addr: SocketAddr,
+    mode: ServerMode,
+    open_browser: bool,
+    paths: ProjectPaths,
+) -> anyhow::Result<()> {
+    let snapshot = project::load_snapshot(&paths)?;
+    let store = Store::open(&paths.db_path)?;
+    store.replace_snapshot(&snapshot)?;
+    let secrets = SecretManager::new(store.clone(), &paths.secret_key_path)?;
+
+    let _watcher: ProjectWatcher = watcher::spawn(paths.clone(), store.clone())
+        .context("failed to start project file watcher")?;
+
     let _vite_child: Option<Child> = match &mode {
         ServerMode::DevProxy {
             upstream,
@@ -51,11 +92,37 @@ pub async fn run(addr: SocketAddr, mode: ServerMode, open_browser: bool) -> anyh
         _ => None,
     };
 
-    let state = AppState { mode: mode.clone() };
+    let state = AppState {
+        mode: mode.clone(),
+        paths,
+        store,
+        secrets,
+        registry: RunRegistry::new(),
+    };
 
     let api = Router::new()
         .route("/api/health", get(health))
-        .route("/api/version", get(version));
+        .route("/api/version", get(version))
+        .route("/api/project", get(project_view))
+        .route("/api/environments", get(environments))
+        .route("/api/requests", get(requests))
+        .route("/api/drafts", get(drafts))
+        .route(
+            "/api/drafts/{request_id}",
+            post(upsert_draft).delete(delete_draft),
+        )
+        .route("/api/drafts/{request_id}/save", post(save_draft))
+        .route("/api/history", get(history).delete(clear_history))
+        .route("/api/history/{id}", axum::routing::delete(delete_history))
+        .route("/api/runs", get(list_runs))
+        .route("/api/runs/{run_id}", get(get_run))
+        .route("/api/runs/{run_id}/cancel", post(cancel_run))
+        .route("/api/requests/{request_id}/run", post(run_request_handler))
+        .route("/api/secrets", get(list_secrets))
+        .route(
+            "/api/secrets/{name}",
+            post(upsert_secret).delete(delete_secret),
+        );
 
     let app = api
         .fallback(ui_fallback)
@@ -106,6 +173,177 @@ async fn version() -> Json<Value> {
     }))
 }
 
+async fn project_view(State(state): State<AppState>) -> Result<Json<ProjectView>, ApiError> {
+    Ok(Json(state.store.project_view()?))
+}
+
+async fn environments(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<crate::config::Environment>>, ApiError> {
+    Ok(Json(state.store.environments()?))
+}
+
+async fn requests(State(state): State<AppState>) -> Result<Json<Vec<ApiRequest>>, ApiError> {
+    Ok(Json(state.store.requests()?))
+}
+
+async fn drafts(State(state): State<AppState>) -> Result<Json<Vec<Draft>>, ApiError> {
+    Ok(Json(state.store.drafts()?))
+}
+
+async fn upsert_draft(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+    Json(mut request): Json<ApiRequest>,
+) -> Result<Json<Draft>, ApiError> {
+    request.id = request_id.clone();
+    Ok(Json(state.store.upsert_draft(&request_id, &request)?))
+}
+
+async fn delete_draft(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state.store.delete_draft(&request_id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn save_draft(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+) -> Result<Json<Vec<ApiRequest>>, ApiError> {
+    let draft = state
+        .store
+        .drafts()?
+        .into_iter()
+        .find(|draft| draft.request_id == request_id)
+        .ok_or_else(|| ApiError::not_found(format!("draft `{request_id}` not found")))?;
+
+    project::save_request(&state.paths, &draft.request)?;
+    state.store.replace_request_from_save(&draft.request)?;
+    state.store.delete_draft(&request_id)?;
+    Ok(Json(state.store.requests()?))
+}
+
+#[derive(Debug, Deserialize)]
+struct HistoryQuery {
+    limit: Option<i64>,
+    request_id: Option<String>,
+}
+
+async fn history(
+    State(state): State<AppState>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<ResponseHistory>>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 1000);
+    let items = match query.request_id {
+        Some(request_id) => state.store.history_for_request(&request_id, limit)?,
+        None => state.store.history(limit)?,
+    };
+    Ok(Json(items))
+}
+
+async fn delete_history(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    state.store.delete_history(id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn clear_history(State(state): State<AppState>) -> Result<StatusCode, ApiError> {
+    state.store.clear_history()?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+struct RunsQuery {
+    limit: Option<i64>,
+}
+
+async fn list_runs(
+    State(state): State<AppState>,
+    Query(query): Query<RunsQuery>,
+) -> Result<Json<Vec<Run>>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 500);
+    Ok(Json(state.store.list_runs(limit)?))
+}
+
+async fn get_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<Run>, ApiError> {
+    state
+        .store
+        .run(&run_id)?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found(format!("run `{run_id}` not found")))
+}
+
+async fn cancel_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let canceled = state.registry.cancel(&run_id).await;
+    Ok(Json(json!({ "canceled": canceled })))
+}
+
+#[derive(Debug, Deserialize)]
+struct RunBody {
+    #[serde(default)]
+    environment_id: Option<String>,
+}
+
+async fn run_request_handler(
+    State(state): State<AppState>,
+    Path(request_id): Path<String>,
+    Json(body): Json<RunBody>,
+) -> Result<Json<runner::RunOutcome>, ApiError> {
+    let run_id = generate_run_id();
+    let input = RunRequestInput {
+        environment_id: body.environment_id,
+    };
+    let ctx = state.run_context();
+    let outcome = runner::run_request(ctx, run_id, request_id, input).await?;
+    Ok(Json(outcome))
+}
+
+fn generate_run_id() -> String {
+    use chrono::Utc;
+    use std::time::SystemTime;
+    let micros = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_micros())
+        .unwrap_or(0);
+    format!("run_{}_{}", Utc::now().format("%Y%m%dT%H%M%S"), micros)
+}
+
+#[derive(Debug, Deserialize)]
+struct SecretBody {
+    value: String,
+}
+
+async fn list_secrets(State(state): State<AppState>) -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(state.secrets.list_names()?))
+}
+
+async fn upsert_secret(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(body): Json<SecretBody>,
+) -> Result<StatusCode, ApiError> {
+    state.secrets.set(&name, &body.value)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_secret(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state.secrets.delete(&name)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn ui_fallback(
     State(state): State<AppState>,
     req: axum::http::Request<axum::body::Body>,
@@ -121,7 +359,6 @@ async fn spawn_vite_dev(web_dir: &PathBuf, port: u16) -> anyhow::Result<Child> {
         anyhow::bail!("no package.json found in {}", web_dir.display());
     }
 
-    // Run `pnpm install` if node_modules is missing. Best-effort, non-fatal.
     if !web_dir.join("node_modules").exists() {
         info!(dir = %web_dir.display(), "installing web dependencies (pnpm install)");
         let status = Command::new("pnpm")
@@ -187,4 +424,40 @@ async fn shutdown_signal() {
     }
 
     info!("shutting down");
+}
+
+#[derive(Debug)]
+struct ApiError {
+    status: StatusCode,
+    message: String,
+}
+
+impl ApiError {
+    fn not_found(message: String) -> Self {
+        Self {
+            status: StatusCode::NOT_FOUND,
+            message,
+        }
+    }
+}
+
+impl From<anyhow::Error> for ApiError {
+    fn from(value: anyhow::Error) -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: value.to_string(),
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        (
+            self.status,
+            Json(json!({
+                "error": self.message,
+            })),
+        )
+            .into_response()
+    }
 }

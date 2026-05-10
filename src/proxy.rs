@@ -12,9 +12,9 @@
 use std::net::SocketAddr;
 
 use axum::body::Body;
-use axum::extract::FromRequestParts;
 use axum::extract::ws::{Message as AxumMsg, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header};
+use axum::extract::FromRequestParts;
+use axum::http::{header, HeaderMap, HeaderValue, Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -138,7 +138,10 @@ async fn upgrade_websocket(upstream: SocketAddr, req: Request<Body>) -> Response
         Ok(mut ws) => {
             if let Some(proto) = sec_proto.clone() {
                 ws = ws.protocols(
-                    proto.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>(),
+                    proto
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect::<Vec<_>>(),
                 );
             }
             ws.on_upgrade(move |client_socket| async move {
@@ -178,9 +181,9 @@ async fn bridge_websocket(
         while let Some(Ok(msg)) = cl_rx.next().await {
             let out = match msg {
                 AxumMsg::Text(t) => TungsteniteMsg::Text(t.as_str().into()),
-                AxumMsg::Binary(b) => TungsteniteMsg::Binary(b.into()),
-                AxumMsg::Ping(p) => TungsteniteMsg::Ping(p.into()),
-                AxumMsg::Pong(p) => TungsteniteMsg::Pong(p.into()),
+                AxumMsg::Binary(b) => TungsteniteMsg::Binary(b),
+                AxumMsg::Ping(p) => TungsteniteMsg::Ping(p),
+                AxumMsg::Pong(p) => TungsteniteMsg::Pong(p),
                 AxumMsg::Close(_) => {
                     let _ = up_tx.send(TungsteniteMsg::Close(None)).await;
                     break;
@@ -214,4 +217,3 @@ async fn bridge_websocket(
     tokio::join!(client_to_upstream, upstream_to_client);
     Ok(())
 }
-

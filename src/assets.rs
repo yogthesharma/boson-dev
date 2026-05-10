@@ -4,7 +4,7 @@
 
 use axum::body::Body;
 #[cfg(feature = "embed-ui")]
-use axum::http::{HeaderValue, header};
+use axum::http::{header, HeaderValue};
 use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 

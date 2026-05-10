@@ -1,12 +1,15 @@
 # boson
 
-A Rust CLI with an embedded Vite + React + TypeScript UI. The same binary can:
+Boson is a local-first REST API client. Users keep API definitions in
+source-controlled YAML, while the Rust server projects those files into a local
+SQLite database for drafts, request history, and safe UI editing.
 
-- **Serve the production UI** from assets compiled into the executable
-  (`boson serve`).
-- **Run a dev loop** that spawns the Vite dev server and reverse-proxies it,
-  including HMR websockets, so the Rust process is always the single
-  entrypoint (`boson dev`).
+The same binary can:
+
+- initialize a project (`boson init`)
+- run the local API server and browser UI (`boson dev` / `boson serve`)
+- execute requests through Rust and store response history in SQLite
+- embed the production Vite + React UI into the executable
 
 ## Layout
 
@@ -16,7 +19,11 @@ boson/
 ├── build.rs              # runs `pnpm build` in web/ when embedding the UI
 ├── src/
 │   ├── main.rs           # tracing + clap entrypoint
-│   ├── cli.rs            # `boson serve` and `boson dev` commands
+│   ├── cli.rs            # init/dev/serve/update commands
+│   ├── config.rs         # YAML schema
+│   ├── db.rs             # SQLite migrations and repositories
+│   ├── project.rs        # project discovery/init/load/save helpers
+│   ├── runner.rs         # request execution
 │   ├── server.rs         # axum server, /api routes, fallback dispatch
 │   ├── proxy.rs          # HTTP + WS reverse proxy to the Vite dev server
 │   └── assets.rs         # rust-embed-backed static asset handler
@@ -36,10 +43,31 @@ boson/
 
 ## Quick start
 
+### Initialize a user project
+
+```bash
+cargo run --no-default-features -- init ./example-api --name Example
+```
+
+This creates:
+
+```text
+example-api/
+├── boson.yml
+├── boson/
+│   ├── environments.yml
+│   └── requests.yml
+└── .boson/
+    └── state.db
+```
+
+`boson.yml` and `boson/*.yml` are the source of truth and should be committed.
+`.boson/state.db` is local runtime state and is added to `.gitignore`.
+
 ### Development (HMR)
 
 ```bash
-cargo run --no-default-features -- dev
+cargo run --no-default-features -- dev --project-dir ./example-api
 ```
 
 This:
@@ -56,16 +84,16 @@ the upfront UI build.
 Useful flags:
 
 ```bash
-boson dev --port 9000 --vite-port 5174    # custom ports
-boson dev --no-spawn-vite                 # bring your own `pnpm dev`
-boson dev --no-open                       # don't auto-open the browser
+boson dev --project-dir ./example-api --port 9000 --vite-port 5174
+boson dev --project-dir ./example-api --no-spawn-vite
+boson dev --project-dir ./example-api --no-open
 ```
 
 ### Production (single binary)
 
 ```bash
 cargo build --release
-./target/release/boson serve
+./target/release/boson serve --project-dir ./example-api
 ```
 
 The `embed-ui` feature (default-on) causes `build.rs` to run `pnpm install` /
@@ -74,13 +102,22 @@ The resulting executable has no Node runtime requirement.
 
 ## API
 
-The Rust server owns `/api/*`. Two example endpoints are wired up:
+The Rust server owns `/api/*`. Initial endpoints:
 
-- `GET /api/health` → `{ "status": "ok", "version": "0.1.0" }`
-- `GET /api/version` → `{ "name": "boson", "version": "0.1.0" }`
+- `GET /api/health`
+- `GET /api/version`
+- `GET /api/project`
+- `GET /api/environments`
+- `GET /api/requests`
+- `GET /api/drafts`
+- `POST /api/drafts/{request_id}`
+- `DELETE /api/drafts/{request_id}`
+- `POST /api/drafts/{request_id}/save`
+- `GET /api/history`
+- `POST /api/requests/{request_id}/run`
 
-Add new routes in `src/server.rs`. Anything outside `/api/*` falls through to
-the UI (embedded assets in release, Vite proxy in dev).
+Anything outside `/api/*` falls through to the UI (embedded assets in release,
+Vite proxy in dev).
 
 ## Environment variables
 
