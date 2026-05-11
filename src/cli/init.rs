@@ -16,5 +16,18 @@ pub(super) fn init(args: InitArgs) -> anyhow::Result<()> {
     println!("created {}", paths.manifest.display());
     println!("created {}", paths.db_path.display());
     println!("created {}", paths.secret_key_path.display());
+    println!();
+    println!("next steps:");
+    println!("  cd {}", paths.root.display());
+    println!("  boson doctor --project-dir .");
+    println!("  boson dev --project-dir .");
+    if let Some(first) = snapshot.requests.first() {
+        println!("  boson run {} --project-dir .", first.id);
+    } else {
+        println!("  boson run <request_id> --project-dir .");
+    }
+    println!();
+    println!("example project flow:");
+    println!("  just dev-example");
     Ok(())
 }

@@ -1,5 +1,7 @@
 use boson::cli;
 use clap::Parser;
+use std::io::{self, IsTerminal, Write};
+use std::path::Path;
 
 #[tokio::main]
 async fn main() {
@@ -27,6 +29,7 @@ fn init_tracing() {
 fn report_error_with_hints(err: &anyhow::Error) {
     eprintln!("error: {err:#}");
     let combined = format!("{err:#}").to_ascii_lowercase();
+    maybe_offer_project_init(&combined);
     let hints = build_hints(&combined);
     if !hints.is_empty() {
         eprintln!();
@@ -34,6 +37,44 @@ fn report_error_with_hints(err: &anyhow::Error) {
         for hint in hints {
             eprintln!("  - {hint}");
         }
+    }
+}
+
+fn maybe_offer_project_init(message: &str) {
+    if !message.contains("no boson.yml found") {
+        return;
+    }
+    let stdin = io::stdin();
+    if !stdin.is_terminal() {
+        return;
+    }
+
+    eprintln!();
+    eprintln!("No Boson project was found in this directory tree.");
+    eprintln!("Choose one:");
+    eprintln!("  [1] Initialize a project here (`boson init .`)");
+    eprintln!("  [2] Keep current files and run with `--project-dir <path>`");
+    eprintln!("  [3] Cancel");
+    eprint!("Selection [1/2/3] (default 2): ");
+    let _ = io::stderr().flush();
+
+    let mut answer = String::new();
+    if stdin.read_line(&mut answer).is_err() {
+        return;
+    }
+    let answer = answer.trim();
+    if answer == "1" {
+        if Path::new("boson.yml").exists() {
+            eprintln!("`boson.yml` already exists in the current directory; skipping init.");
+            return;
+        }
+        eprintln!("Run this command next:");
+        eprintln!("  boson init . && boson doctor --project-dir . && boson dev --project-dir .");
+    } else if answer == "2" || answer.is_empty() {
+        eprintln!("Run this command next:");
+        eprintln!("  boson doctor --project-dir <path>");
+    } else {
+        eprintln!("Cancelled.");
     }
 }
 
