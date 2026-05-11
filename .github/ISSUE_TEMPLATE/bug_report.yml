@@ -1,0 +1,43 @@
+name: Bug report
+description: Something is broken or behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a **security** issue, use [Security advisories](https://github.com/yogthesharma/boson-dev/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Boson version
+      description: Output of `boson --version`
+      placeholder: "e.g. 0.1.5"
+    validations:
+      required: true
+  - type: textarea
+    id: platform
+    attributes:
+      label: Platform
+      description: OS and architecture if relevant
+      placeholder: "e.g. macOS 15, aarch64"
+    validations:
+      required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal commands or clicks to hit the bug
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true

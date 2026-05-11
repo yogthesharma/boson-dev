@@ -36,9 +36,11 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at **REPLACE_WITH_CONTACT** (for example the email or URL you enter in GitHub’s “Add code of conduct” form).
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement by **[opening an issue](https://github.com/yogthesharma/boson-dev/issues/new)** with a title starting with `[Code of Conduct]:` so it is routed correctly.
 
-Maintainers: replace `REPLACE_WITH_CONTACT` with the same value (e.g. `conduct@yourdomain.com` or a reporting link you monitor).
+If you need a **private** channel and GitHub does not offer one you trust, contact maintainers via the options on their **GitHub profiles** (or ask in a **[Discussion](https://github.com/yogthesharma/boson-dev/discussions)** for how to reach out privately).
+
+Maintainers may add a dedicated email in this file for confidential conduct reports.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 

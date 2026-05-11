@@ -214,23 +214,10 @@ Example workspace docs: `example/README.md`.
 
 ## Contributing
 
-Contributions are welcome. Be kind and professional; see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (Contributor Covenant).
-
-1. Fork and create a feature branch.
-2. Make focused changes with tests/checks.
-3. Run local checks:
-
-```bash
-cargo check --no-default-features
-just ci
-```
-
-4. Open a PR with a clear summary and test plan.
-
-For release changes, follow `docs/release-verify-checklist.md`.
+See **[`CONTRIBUTING.md`](CONTRIBUTING.md)**. Be kind and professional; this project follows the **[Contributor Covenant](CODE_OF_CONDUCT.md)**.
 
 ---
 
 ## License
 
-MIT.
+This project is licensed under the **MIT License** — see [`LICENSE`](LICENSE).
