@@ -280,9 +280,16 @@ boson/
 | **`boson serve`** | **Production** mode: serve **embedded** UI from the binary + API |
 | **`boson run <request_id>`** | Run one request; optional `--environment`, `--raw` |
 | **`boson lint` / `boson check`** | Validate YAML |
+| **`boson doctor`** | Diagnose local setup (tools, ports, writable dirs, project health) |
 | **`boson update`** | Self-update from GitHub releases (`--check`, `--yes`, `--repo <owner>/<name>`) |
 
 Global defaults: `--project-dir` usually defaults to **`.`**; server bind defaults to **`127.0.0.1:8787`**.
+
+If local dev fails, run:
+
+```bash
+boson doctor --project-dir .
+```
 
 ---
 

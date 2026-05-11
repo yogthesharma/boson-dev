@@ -65,6 +65,10 @@ demo:
 project-lint project_dir="example-api":
     cargo run --no-default-features -- lint --project-dir {{project_dir}}
 
+# Diagnose local setup for running Boson locally.
+doctor project_dir=".":
+    cargo run --no-default-features -- doctor --project-dir {{project_dir}}
+
 # Run a single request from the CLI.
 request id project_dir="example-api":
     cargo run --no-default-features -- run --project-dir {{project_dir}} {{id}}

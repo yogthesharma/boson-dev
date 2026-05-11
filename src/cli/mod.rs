@@ -2,13 +2,14 @@
 //! command is implemented in its own submodule for clarity.
 
 mod args;
+mod doctor;
 mod init;
 mod lint;
 mod run;
 mod serve;
 mod update;
 
-pub use args::{DevArgs, InitArgs, LintArgs, RunArgs, ServeArgs, UpdateArgs};
+pub use args::{DevArgs, DoctorArgs, InitArgs, LintArgs, RunArgs, ServeArgs, UpdateArgs};
 
 use clap::{Parser, Subcommand};
 
@@ -48,6 +49,9 @@ pub enum Command {
     /// Validate the project (alias for `lint`).
     Check(LintArgs),
 
+    /// Diagnose local setup: tools, ports, writable dirs, and project validity.
+    Doctor(DoctorArgs),
+
     /// Update the boson binary in place by checking the configured release feed.
     Update(UpdateArgs),
 }
@@ -60,6 +64,7 @@ impl Cli {
             Command::Dev(args) => serve::dev_cmd(args).await,
             Command::Run(args) => run::run_cmd(args).await,
             Command::Lint(args) | Command::Check(args) => lint::lint_cmd(args),
+            Command::Doctor(args) => doctor::doctor_cmd(args),
             Command::Update(args) => update::update_cmd(args),
         }
     }

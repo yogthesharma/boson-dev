@@ -98,6 +98,29 @@ pub struct LintArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct DoctorArgs {
+    /// Boson project directory, or any child directory inside it.
+    #[arg(long, default_value = ".")]
+    pub project_dir: PathBuf,
+
+    /// Path to the Vite project (containing package.json + vite.config).
+    #[arg(long, default_value = "web")]
+    pub web_dir: PathBuf,
+
+    /// API/server port to check.
+    #[arg(long, default_value_t = 8787)]
+    pub port: u16,
+
+    /// Vite dev-server port to check.
+    #[arg(long, default_value_t = 5173)]
+    pub vite_port: u16,
+
+    /// Example API port to check.
+    #[arg(long, default_value_t = 4321)]
+    pub example_api_port: u16,
+}
+
+#[derive(Debug, Args)]
 pub struct UpdateArgs {
     /// `<owner>/<repo>` GitHub slug to look for releases in. Defaults to the
     /// repository the binary was built from.
