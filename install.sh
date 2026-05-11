@@ -21,6 +21,17 @@ msg()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+curl_retry() {
+  curl \
+    --fail \
+    --location \
+    --retry 6 \
+    --retry-delay 2 \
+    --retry-max-time 120 \
+    --retry-all-errors \
+    "$@"
+}
+
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
@@ -57,7 +68,7 @@ resolve_version() {
   local api="https://api.github.com/repos/${REPO}/releases/latest"
   local tag
   tag="$(
-    curl -fsSL "$api" \
+    curl_retry -sS "$api" \
       | grep -E '"tag_name"[[:space:]]*:' \
       | head -n 1 \
       | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
@@ -103,11 +114,11 @@ main() {
   trap 'rm -rf "${tmp:-}"' EXIT INT TERM
 
   tarball="${tmp}/${asset}"
-  curl --fail --location --progress-bar --output "$tarball" "$url" \
+  curl_retry --progress-bar --output "$tarball" "$url" \
     || die "failed to download $url"
 
   local expected_sha=""
-  if curl -fsSL "${url}.sha256" -o "${tmp}/${asset}.sha256" 2>/dev/null; then
+  if curl_retry -sS "${url}.sha256" -o "${tmp}/${asset}.sha256" 2>/dev/null; then
     expected_sha="$(awk '{print $1}' "${tmp}/${asset}.sha256" | head -n 1 || true)"
   fi
   if [ -n "$expected_sha" ]; then

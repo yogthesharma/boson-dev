@@ -1,6 +1,6 @@
 [package]
 name = "boson"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Boson CLI with an embedded Vite + React UI"
 license = "MIT"
