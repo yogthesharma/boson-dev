@@ -39,14 +39,23 @@ jobs:
           fi
 
       - name: Validate tag exists on remote
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
           remote="https://github.com/${GITHUB_REPOSITORY}.git"
-          if ! git ls-remote --exit-code --tags "${remote}" "refs/tags/${TAG}" >/dev/null; then
-            echo "::error title=Missing release tag::Tag '${TAG}' was not found on origin. Push the tag first (git push origin ${TAG})."
-            exit 1
-          fi
+          for attempt in 1 2 3 4 5; do
+            if git ls-remote --exit-code --tags "${remote}" "refs/tags/${TAG}" >/dev/null; then
+              exit 0
+            fi
+            if [ "${attempt}" -eq 5 ]; then
+              echo "::error title=Missing release tag::Tag '${TAG}' was not found on origin. Push the tag first (git push origin ${TAG})."
+              exit 1
+            fi
+            sleep_for=$((attempt * 3))
+            echo "tag check retry ${attempt}/5 failed; waiting ${sleep_for}s..."
+            sleep "${sleep_for}"
+          done
 
   build:
     name: ${{ matrix.target }}
