@@ -21,8 +21,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    name: Preflight release inputs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Validate tag format
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error title=Invalid release tag::TAG must look like v0.1.0 or v0.1.0-rc.1. Got: ${TAG}"
+            exit 1
+          fi
+
+      - name: Validate tag exists on remote
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          if ! git ls-remote --exit-code --tags "${remote}" "refs/tags/${TAG}" >/dev/null; then
+            echo "::error title=Missing release tag::Tag '${TAG}' was not found on origin. Push the tag first (git push origin ${TAG})."
+            exit 1
+          fi
+
   build:
     name: ${{ matrix.target }}
+    needs: preflight
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     continue-on-error: ${{ matrix.non_blocking || false }}
@@ -52,7 +80,7 @@ jobs:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ env.TAG }}
 
@@ -76,7 +104,7 @@ jobs:
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
@@ -127,7 +155,7 @@ jobs:
           "$hash  $name.zip" | Out-File -Encoding ascii "dist/$name.zip.sha256"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: boson-${{ matrix.target }}
           path: |
@@ -145,12 +173,12 @@ jobs:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ env.TAG }}
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
@@ -172,3 +200,46 @@ jobs:
             dist/boson-*.tar.gz.sha256
             dist/boson-*.zip
             dist/boson-*.zip.sha256
+
+  verify:
+    name: Verify release artifacts
+    needs: publish
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release verify checklist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 1) Assets present
+          test -f dist/boson-x86_64-unknown-linux-gnu.tar.gz
+          test -f dist/boson-x86_64-unknown-linux-gnu.tar.gz.sha256
+          test -f dist/boson-aarch64-unknown-linux-gnu.tar.gz
+          test -f dist/boson-aarch64-unknown-linux-gnu.tar.gz.sha256
+          test -f dist/boson-x86_64-pc-windows-msvc.zip
+          test -f dist/boson-x86_64-pc-windows-msvc.zip.sha256
+          echo "assets present: ok"
+
+          # 2) Checksums valid
+          (cd dist && shasum -a 256 -c *.sha256)
+          echo "checksums valid: ok"
+
+          # 3) install.sh smoke test against this exact tag
+          tmp_install="$(mktemp -d)"
+          BOSON_VERSION="${TAG}" BOSON_INSTALL_DIR="${tmp_install}" bash ./install.sh
+          "${tmp_install}/boson" --version
+          echo "install script smoke test: ok"
