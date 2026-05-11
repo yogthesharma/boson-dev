@@ -214,7 +214,7 @@ Example workspace docs: `example/README.md`.
 
 ## Contributing
 
-Contributions are welcome.
+Contributions are welcome. Be kind and professional; see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (Contributor Covenant).
 
 1. Fork and create a feature branch.
 2. Make focused changes with tests/checks.
