@@ -1,13 +1,18 @@
-//! `boson serve` and `boson dev` — both bring up the Axum server, just with
-//! different fallthrough modes (embedded assets vs Vite dev proxy).
+//! `boson serve` always ships in the binary. `boson dev` (Vite + HMR) exists only
+//! in contributor builds (`--no-default-features`).
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
+#[cfg(not(feature = "embed-ui"))]
+use std::net::{IpAddr, Ipv4Addr};
+#[cfg(not(feature = "embed-ui"))]
 use std::path::{Path, PathBuf};
 
 use crate::project;
 use crate::server::{self, ServerMode};
 
-use super::args::{DevArgs, ServeArgs};
+use super::args::ServeArgs;
+#[cfg(not(feature = "embed-ui"))]
+use super::args::DevArgs;
 
 pub(super) async fn serve_cmd(args: ServeArgs) -> anyhow::Result<()> {
     let addr = SocketAddr::new(args.host, args.port);
@@ -16,6 +21,7 @@ pub(super) async fn serve_cmd(args: ServeArgs) -> anyhow::Result<()> {
     server::run(addr, mode, !args.no_open, paths).await
 }
 
+#[cfg(not(feature = "embed-ui"))]
 pub(super) async fn dev_cmd(args: DevArgs) -> anyhow::Result<()> {
     let paths = project::discover(Some(&args.project_dir))?;
     let web_dir = resolve_web_dir(&paths.root, args.web_dir);
@@ -50,6 +56,7 @@ pub(super) async fn dev_cmd(args: DevArgs) -> anyhow::Result<()> {
 }
 
 /// `web` is relative to cwd (monorepo) or to the discovered project root.
+#[cfg(not(feature = "embed-ui"))]
 fn resolve_web_dir(project_root: &Path, web_dir: PathBuf) -> PathBuf {
     if web_dir.is_absolute() {
         return web_dir;

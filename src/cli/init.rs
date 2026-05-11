@@ -38,12 +38,21 @@ pub(super) fn init(args: InitArgs) -> anyhow::Result<()> {
         println!("  boson run <request_id> --project-dir .");
     }
     println!();
-    println!("optional (live UI / HMR — needs the Boson repo `web/` tree):");
-    println!("  boson dev --project-dir . --web-dir /path/to/boson/web");
-    println!();
-    println!("example project flow (from a Boson git checkout):");
-    println!("  just dev-example");
-    println!();
+    println!("from any directory (optional):");
+    println!(
+        "  BOSON_PROJECT_DIR=\"{}\" boson serve",
+        paths.root.display()
+    );
+    #[cfg(not(feature = "embed-ui"))]
+    {
+        println!();
+        println!("optional contributor build only (Vite + HMR, needs Boson repo `web/`):");
+        println!("  boson dev --project-dir . --web-dir /path/to/boson/web");
+        println!();
+        println!("example stack (from a Boson git checkout):");
+        println!("  just dev-example");
+        println!();
+    }
     println!("tip: prefer `boson init my-api` so the project root is `my-api/` — avoid `my-api/boson/`");
     println!("      or you get paths like `boson/environments.yml` nested under a folder named `boson`.");
     Ok(())

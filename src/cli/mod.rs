@@ -9,7 +9,9 @@ mod run;
 mod serve;
 mod update;
 
-pub use args::{DevArgs, DoctorArgs, InitArgs, LintArgs, RunArgs, ServeArgs, UpdateArgs};
+pub use args::{DoctorArgs, InitArgs, LintArgs, RunArgs, ServeArgs, UpdateArgs};
+#[cfg(not(feature = "embed-ui"))]
+pub use args::DevArgs;
 
 use clap::{Parser, Subcommand};
 
@@ -19,8 +21,8 @@ use clap::{Parser, Subcommand};
     version,
     about = "Boson \u{2014} a local-first REST API client",
     long_about = "Boson is a local-first REST API client. The user's YAML files are the source \
-                  of truth; the Rust server projects them into SQLite and serves a Vite + React \
-                  UI for editing and execution.",
+                  of truth; the Rust server projects them into SQLite and serves a web UI for \
+                  editing and execution.",
     propagate_version = true
 )]
 pub struct Cli {
@@ -36,8 +38,9 @@ pub enum Command {
     /// Run the production server, serving the UI from assets embedded in the binary.
     Serve(ServeArgs),
 
-    /// Run the development server. Spawns `pnpm dev` in `web/` and reverse-proxies
-    /// non-API requests (including HMR websockets) to the Vite dev server.
+    /// Run the development server (Vite + HMR). Only available in contributor builds
+    /// (`cargo build --no-default-features`); not in release binaries.
+    #[cfg(not(feature = "embed-ui"))]
     Dev(DevArgs),
 
     /// Execute a request by id and print the response to stdout.
@@ -61,6 +64,7 @@ impl Cli {
         match self.command {
             Command::Init(args) => init::init(args),
             Command::Serve(args) => serve::serve_cmd(args).await,
+            #[cfg(not(feature = "embed-ui"))]
             Command::Dev(args) => serve::dev_cmd(args).await,
             Command::Run(args) => run::run_cmd(args).await,
             Command::Lint(args) | Command::Check(args) => lint::lint_cmd(args),

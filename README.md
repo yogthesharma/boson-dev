@@ -56,17 +56,21 @@ boson doctor --project-dir .
 
 ### 3) Start the app
 
+From inside the project (or set `BOSON_PROJECT_DIR` to its path):
+
 ```bash
-boson dev --project-dir .
+boson serve
 ```
 
-Open `http://127.0.0.1:8787`.
+Open `http://127.0.0.1:8787` (or the host/port you set — see **Environment variables**).
 
 ### 4) Run a request from CLI
 
 ```bash
-boson run hello --project-dir .
+boson run hello
 ```
+
+(`BOSON_PROJECT_DIR` applies here too if you are not `cd`'d into the project.)
 
 If you hit setup issues, `boson doctor` reports missing tools, port conflicts, writable-path issues, and project validation errors with fix commands. For CI, use `boson doctor --strict` (exit non-zero on warnings) and/or `--json` for machine-readable output.
 
@@ -78,8 +82,8 @@ Boson treats API workflows like code:
 
 - `boson.yml` + `boson/**/*.yml` are the source of truth
 - project-local state lives in `.boson/` (SQLite + key file)
-- `boson dev` runs Rust server + Vite proxy (HMR)
-- `boson serve` runs production embedded UI
+- **`boson serve`** runs the embedded UI + API (what release binaries ship)
+- **`boson dev`** (Vite + HMR) exists only in **contributor** builds (`cargo build` / `cargo run --no-default-features` from this repo), not in normal release installs
 
 Commit YAML files, do not commit `.boson/`.
 
@@ -101,12 +105,13 @@ Commit YAML files, do not commit `.boson/`.
 | Command                      | Purpose                                 |
 | ---------------------------- | --------------------------------------- |
 | `boson init [dir]`           | Create a new Boson project              |
-| `boson dev`                  | Dev mode (API + Vite proxy + HMR)       |
-| `boson serve`                | Production mode (embedded UI)           |
+| `boson serve`                | Run embedded UI + API (default install) |
 | `boson run <request_id>`     | Execute one request                     |
 | `boson lint` / `boson check` | Validate project YAML                   |
 | `boson doctor`               | Diagnose local setup; add `--strict` / `--json` for CI and tooling |
 | `boson update`               | Self-update from GitHub releases        |
+
+Contributor builds from source may also expose **`boson dev`** (Vite + HMR against the repo `web/` tree).
 
 ---
 
@@ -155,7 +160,7 @@ Common endpoints:
 - `GET /api/secrets`
 - `POST /api/secrets/{name}`
 
-In `boson dev`, non-`/api/*` traffic is proxied to Vite.
+In contributor **`boson dev`**, non-`/api/*` traffic is proxied to Vite. **`boson serve`** serves the embedded UI for `/` and API under `/api`.
 
 ---
 
@@ -188,6 +193,14 @@ pnpm install --dir web
 cargo build --release
 ```
 
+Release-style binary (default features, includes **`boson serve`** only): use the command above.
+
+Contributor binary (includes **`boson dev`** for Vite + HMR):
+
+```bash
+cargo build --no-default-features
+```
+
 ### Useful local commands
 
 ```bash
@@ -202,6 +215,9 @@ Example workspace docs: `example/README.md`.
 
 ## Environment Variables
 
+- **`BOSON_PROJECT_DIR`** — default project directory for `serve`, `run`, `lint`, `doctor` when you omit `--project-dir`
+- **`BOSON_PORT`** — default listen port for `serve` (and contributor `dev`) when you omit `--port`
+- **`BOSON_VITE_PORT`** — contributor `dev` only: Vite port when omitted
 - `RUST_LOG`
 - `BOSON_SKIP_WEB_BUILD`
 - `BOSON_PNPM`

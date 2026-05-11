@@ -23,8 +23,7 @@ Quick start (repo root, one command):
 just dev-example
 ```
 
-This starts the Fastify example API and then runs `boson dev --project-dir example`
-(which also starts Vite for the web UI with HMR).
+This starts the Fastify example API and then runs **`cargo run --no-default-features -- dev --project-dir example`** (Vite + HMR — contributor workflow from this repo).
 
 If you prefer Cargo aliases for the Rust/web side:
 
@@ -32,7 +31,7 @@ If you prefer Cargo aliases for the Rust/web side:
 cargo dev-example
 ```
 
-Then start the Fastify example API separately in another terminal:
+**Installed release binary:** start the API (see Manual mode below), then from repo root run `BOSON_PROJECT_DIR="$(pwd)/example" boson serve`, or `cd example && boson serve`.
 
 Manual mode:
 
@@ -51,10 +50,24 @@ curl http://127.0.0.1:4321/todos
 
 ## 2. Run Boson against the example project
 
-From the repo root, in another terminal:
+From the repo root, in another terminal (API from step 1 must be running).
+
+**Release-style binary** (`boson` from GitHub releases):
 
 ```bash
-cargo run -- dev --project-dir example
+cd example && boson serve
+```
+
+**From this repo with embedded UI** (default `cargo build --release`):
+
+```bash
+cargo run --release -- serve --project-dir example
+```
+
+**Contributor stack** (Vite + HMR, same as `just dev-example`):
+
+```bash
+cargo run --no-default-features -- dev --project-dir example --no-open
 ```
 
 That serves the embedded UI at <http://127.0.0.1:8787> (unless you pass `--port`) and watches `example/`

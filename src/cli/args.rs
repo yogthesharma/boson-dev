@@ -24,7 +24,7 @@ pub struct InitArgs {
 #[derive(Debug, Args)]
 pub struct ServeArgs {
     /// Boson project directory, or any child directory inside it.
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", env = "BOSON_PROJECT_DIR")]
     pub project_dir: PathBuf,
 
     /// Address to bind the HTTP server to.
@@ -32,7 +32,7 @@ pub struct ServeArgs {
     pub host: IpAddr,
 
     /// Port to bind the HTTP server to.
-    #[arg(long, short, default_value_t = 8787)]
+    #[arg(long, short, default_value_t = 8787, env = "BOSON_PORT")]
     pub port: u16,
 
     /// Do not open the UI in a browser on startup.
@@ -40,10 +40,11 @@ pub struct ServeArgs {
     pub no_open: bool,
 }
 
+#[cfg(not(feature = "embed-ui"))]
 #[derive(Debug, Args)]
 pub struct DevArgs {
     /// Boson project directory, or any child directory inside it.
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", env = "BOSON_PROJECT_DIR")]
     pub project_dir: PathBuf,
 
     /// Address to bind the HTTP server to.
@@ -51,11 +52,11 @@ pub struct DevArgs {
     pub host: IpAddr,
 
     /// Port to bind the HTTP server to.
-    #[arg(long, short, default_value_t = 8787)]
+    #[arg(long, short, default_value_t = 8787, env = "BOSON_PORT")]
     pub port: u16,
 
     /// Port the Vite dev server listens on (and the Rust server proxies to).
-    #[arg(long, default_value_t = 5173)]
+    #[arg(long, default_value_t = 5173, env = "BOSON_VITE_PORT")]
     pub vite_port: u16,
 
     /// Don't spawn `pnpm dev` automatically. Bring your own Vite on `--vite-port`.
@@ -74,7 +75,7 @@ pub struct DevArgs {
 #[derive(Debug, Args)]
 pub struct RunArgs {
     /// Boson project directory.
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", env = "BOSON_PROJECT_DIR")]
     pub project_dir: PathBuf,
 
     /// Environment id to use (defaults to the first configured environment).
@@ -93,14 +94,14 @@ pub struct RunArgs {
 #[derive(Debug, Args)]
 pub struct LintArgs {
     /// Boson project directory.
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", env = "BOSON_PROJECT_DIR")]
     pub project_dir: PathBuf,
 }
 
 #[derive(Debug, Args)]
 pub struct DoctorArgs {
     /// Boson project directory, or any child directory inside it.
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", env = "BOSON_PROJECT_DIR")]
     pub project_dir: PathBuf,
 
     /// Path to the Vite project (containing package.json + vite.config).

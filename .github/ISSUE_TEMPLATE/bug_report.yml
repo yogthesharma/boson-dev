@@ -11,7 +11,7 @@ body:
     attributes:
       label: Boson version
       description: Output of `boson --version`
-      placeholder: "e.g. 0.1.5"
+      placeholder: "e.g. 0.1.6"
     validations:
       required: true
   - type: textarea

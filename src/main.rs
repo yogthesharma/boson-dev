@@ -69,7 +69,7 @@ fn maybe_offer_project_init(message: &str) {
             return;
         }
         eprintln!("Run this command next:");
-        eprintln!("  boson init . && boson doctor --project-dir . && boson dev --project-dir .");
+        eprintln!("  boson init . && boson doctor --project-dir . && boson serve --project-dir .");
     } else if answer == "2" || answer.is_empty() {
         eprintln!("Run this command next:");
         eprintln!("  boson doctor --project-dir <path>");
@@ -86,7 +86,7 @@ fn build_hints(message: &str) -> Vec<String> {
         || message.contains("in use")
     {
         hints.push("port is likely occupied; inspect listeners with `lsof -nP -iTCP:8787 -sTCP:LISTEN` (and similarly for 5173/4321)".to_string());
-        hints.push("run on a different port: `boson dev --port 9000 --vite-port 5174`".to_string());
+        hints.push("run on a different port: `boson serve --port 9000` (or `BOSON_PORT=9000 boson serve`)".to_string());
     }
 
     if message.contains("failed to spawn `pnpm dev`")
@@ -94,7 +94,7 @@ fn build_hints(message: &str) -> Vec<String> {
         || (message.contains("pnpm") && message.contains("not found"))
     {
         hints.push("pnpm is missing or unavailable; install it with `npm install -g pnpm`".to_string());
-        hints.push("then install web deps and retry: `pnpm --dir web install --frozen-lockfile && boson dev`".to_string());
+        hints.push("for UI hacking from the Boson repo: `pnpm --dir web install --frozen-lockfile` then contributor `boson dev` (not in release builds)".to_string());
     }
 
     if message.contains("no boson.yml found")
@@ -102,7 +102,7 @@ fn build_hints(message: &str) -> Vec<String> {
         || message.contains("failed to resolve")
     {
         hints.push(
-            "project path looks invalid; pass a valid project dir: `boson dev --project-dir <path>`"
+            "project path looks invalid; pass a valid project dir: `boson serve --project-dir <path>` (or set `BOSON_PROJECT_DIR`)"
                 .to_string(),
         );
         hints.push("or initialize a new project first: `boson init <path>`".to_string());
