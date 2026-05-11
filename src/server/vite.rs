@@ -11,7 +11,11 @@ use tracing::info;
 
 pub(super) async fn spawn_vite_dev(web_dir: &PathBuf, port: u16) -> anyhow::Result<Child> {
     if !web_dir.join("package.json").exists() {
-        anyhow::bail!("no package.json found in {}", web_dir.display());
+        anyhow::bail!(
+            "no package.json found in {}\n\
+             hint: use `boson serve` for the embedded UI, or pass `--web-dir` to a Vite project",
+            web_dir.display()
+        );
     }
 
     if !web_dir.join("node_modules").exists() {
