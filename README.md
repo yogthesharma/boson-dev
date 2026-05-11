@@ -3,7 +3,7 @@
 Boson is a local-first, code-first API client for teams that want request collections in Git, not in a hosted workspace.
 
 - YAML collections and environments in your repo
-- Native binary with local UI + API server
+- Native binary with local browser UI + API server
 - Encrypted local secrets, request history, and drafts
 - No Boson cloud account required
 
@@ -68,7 +68,7 @@ Open `http://127.0.0.1:8787`.
 boson run hello --project-dir .
 ```
 
-If you hit setup issues, `boson doctor` reports missing tools, port conflicts, writable-path issues, and project validation errors with fix commands.
+If you hit setup issues, `boson doctor` reports missing tools, port conflicts, writable-path issues, and project validation errors with fix commands. For CI, use `boson doctor --strict` (exit non-zero on warnings) and/or `--json` for machine-readable output.
 
 ---
 
@@ -98,15 +98,15 @@ Commit YAML files, do not commit `.boson/`.
 
 ## CLI Reference
 
-| Command | Purpose |
-|---------|---------|
-| `boson init [dir]` | Create a new Boson project |
-| `boson dev` | Dev mode (API + Vite proxy + HMR) |
-| `boson serve` | Production mode (embedded UI) |
-| `boson run <request_id>` | Execute one request |
-| `boson lint` / `boson check` | Validate project YAML |
-| `boson doctor` | Diagnose local setup and project health |
-| `boson update` | Self-update from GitHub releases |
+| Command                      | Purpose                                 |
+| ---------------------------- | --------------------------------------- |
+| `boson init [dir]`           | Create a new Boson project              |
+| `boson dev`                  | Dev mode (API + Vite proxy + HMR)       |
+| `boson serve`                | Production mode (embedded UI)           |
+| `boson run <request_id>`     | Execute one request                     |
+| `boson lint` / `boson check` | Validate project YAML                   |
+| `boson doctor`               | Diagnose local setup; add `--strict` / `--json` for CI and tooling |
+| `boson update`               | Self-update from GitHub releases        |
 
 ---
 
@@ -117,6 +117,7 @@ Commit YAML files, do not commit `.boson/`.
 ```text
 my-api/
 ├── boson.yml
+├── LLM.md                    # optional: hints for you / coding agents (commit if useful)
 ├── boson/
 │   ├── environments.yml
 │   └── requests.yml

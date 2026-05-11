@@ -69,6 +69,10 @@ project-lint project_dir="example-api":
 doctor project_dir=".":
     cargo run --no-default-features -- doctor --project-dir {{project_dir}}
 
+# Same as doctor, but JSON output and non-zero exit on warnings (CI-friendly).
+doctor-ci project_dir=".":
+    cargo run --no-default-features -- doctor --project-dir {{project_dir}} --strict --json
+
 # Run a single request from the CLI.
 request id project_dir="example-api":
     cargo run --no-default-features -- run --project-dir {{project_dir}} {{id}}

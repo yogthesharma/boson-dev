@@ -13,6 +13,7 @@ pub(super) fn init(args: InitArgs) -> anyhow::Result<()> {
     store.replace_snapshot(&snapshot)?;
     SecretManager::new(store, &paths.secret_key_path)?;
     println!("initialized Boson project at {}", paths.root.display());
+    println!("created {}", paths.root.join("LLM.md").display());
     println!("created {}", paths.manifest.display());
     println!("created {}", paths.db_path.display());
     println!("created {}", paths.secret_key_path.display());

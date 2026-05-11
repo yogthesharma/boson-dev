@@ -118,6 +118,14 @@ pub struct DoctorArgs {
     /// Example API port to check.
     #[arg(long, default_value_t = 4321)]
     pub example_api_port: u16,
+
+    /// Exit with status 1 if any check warns (for CI gates).
+    #[arg(long)]
+    pub strict: bool,
+
+    /// Print results as JSON (for scripts and tooling).
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

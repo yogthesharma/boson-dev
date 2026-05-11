@@ -6,6 +6,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::path::Path;
 use std::process::Command;
 
+use serde_json::json;
+
 use crate::project;
 
 use super::args::DoctorArgs;
@@ -24,7 +26,7 @@ struct CheckResult {
 }
 
 pub(super) fn doctor_cmd(args: DoctorArgs) -> anyhow::Result<()> {
-    let mut checks = Vec::new();
+    let mut checks: Vec<CheckResult> = Vec::new();
 
     checks.push(check_command("node", &["--version"], "install Node.js: https://nodejs.org/en/download"));
     checks.push(check_command(
@@ -45,30 +47,56 @@ pub(super) fn doctor_cmd(args: DoctorArgs) -> anyhow::Result<()> {
 
     checks.extend(check_project_validity(&args.project_dir));
 
-    let mut ok = 0usize;
-    let mut warn = 0usize;
-    println!("Boson Doctor");
-    println!();
-    for result in &checks {
-        match result.state {
-            CheckState::Ok => {
-                ok += 1;
-                println!("  [ok]   {}: {}", result.name, result.detail);
-            }
-            CheckState::Warn => {
-                warn += 1;
-                println!("  [warn] {}: {}", result.name, result.detail);
-                if let Some(fix) = &result.fix {
-                    println!("         fix: {fix}");
+    let ok = checks.iter().filter(|c| matches!(c.state, CheckState::Ok)).count();
+    let warn = checks.iter().filter(|c| matches!(c.state, CheckState::Warn)).count();
+
+    if args.json {
+        let items: Vec<_> = checks
+            .iter()
+            .map(|c| {
+                json!({
+                    "name": c.name,
+                    "status": match c.state {
+                        CheckState::Ok => "ok",
+                        CheckState::Warn => "warn",
+                    },
+                    "detail": c.detail,
+                    "fix": c.fix,
+                })
+            })
+            .collect();
+        let out = json!({
+            "summary": { "ok": ok, "warnings": warn },
+            "checks": items,
+            "strict": args.strict,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("Boson Doctor");
+        println!();
+        for result in &checks {
+            match result.state {
+                CheckState::Ok => {
+                    println!("  [ok]   {}: {}", result.name, result.detail);
+                }
+                CheckState::Warn => {
+                    println!("  [warn] {}: {}", result.name, result.detail);
+                    if let Some(fix) = &result.fix {
+                        println!("         fix: {fix}");
+                    }
                 }
             }
         }
+
+        println!();
+        println!("Summary: {ok} ok, {warn} warnings");
+        if warn > 0 {
+            println!("Some checks need attention before a smooth local run.");
+        }
     }
 
-    println!();
-    println!("Summary: {ok} ok, {warn} warnings");
-    if warn > 0 {
-        println!("Some checks need attention before a smooth local run.");
+    if args.strict && warn > 0 {
+        anyhow::bail!("doctor: {warn} warning(s); fix issues or run without --strict");
     }
     Ok(())
 }

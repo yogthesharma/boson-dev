@@ -49,7 +49,7 @@ pub enum Command {
     /// Validate the project (alias for `lint`).
     Check(LintArgs),
 
-    /// Diagnose local setup: tools, ports, writable dirs, and project validity.
+    /// Diagnose local setup: tools, ports, writable dirs, and project validity (`--strict`, `--json`).
     Doctor(DoctorArgs),
 
     /// Update the boson binary in place by checking the configured release feed.
