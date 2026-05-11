@@ -243,8 +243,19 @@ jobs:
           test -f dist/boson-x86_64-pc-windows-msvc.zip.sha256
           echo "assets present: ok"
 
-          # 2) Checksums valid
-          (cd dist && shasum -a 256 -c *.sha256)
+          # 2) Checksums valid (cross-platform line ending safe)
+          for sum_file in dist/*.sha256; do
+            expected="$(awk '{print $1}' "${sum_file}")"
+            artifact="$(awk '{print $2}' "${sum_file}" | tr -d '\r')"
+            test -n "${expected}"
+            test -n "${artifact}"
+            test -f "dist/${artifact}"
+            actual="$(shasum -a 256 "dist/${artifact}" | awk '{print $1}')"
+            if [ "${actual}" != "${expected}" ]; then
+              echo "::error title=checksum mismatch::${artifact} expected ${expected} got ${actual}"
+              exit 1
+            fi
+          done
           echo "checksums valid: ok"
 
           # 3) Archives are readable
