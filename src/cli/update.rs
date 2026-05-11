@@ -44,6 +44,7 @@ pub(super) fn update_cmd(args: UpdateArgs) -> anyhow::Result<()> {
         .repo_owner(owner)
         .repo_name(name)
         .bin_name("boson")
+        .bin_path_in_archive(&archive_bin_path(target))
         .target(target)
         .identifier(&asset_name)
         .show_download_progress(true)
@@ -116,6 +117,14 @@ fn default_asset_name(target: &str) -> String {
         format!("boson-{target}.zip")
     } else {
         format!("boson-{target}.tar.gz")
+    }
+}
+
+fn archive_bin_path(target: &str) -> String {
+    if target.contains("windows") {
+        format!("boson-{target}/boson.exe")
+    } else {
+        format!("boson-{target}/boson")
     }
 }
 
