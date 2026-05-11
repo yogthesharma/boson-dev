@@ -10,7 +10,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (e.g. v0.1.0). Must already exist."
+        description: >
+          Tag to publish (e.g. v0.1.6). Must already exist on origin — push it
+          first: git tag -a v0.1.6 -m "Release v0.1.6" && git push origin v0.1.6.
+          Pushing a v* tag also starts this workflow; manual dispatch is optional.
         required: true
 
 permissions:

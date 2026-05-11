@@ -1,6 +1,13 @@
 # Release Verify Checklist
 
-Run this after publishing a release tag (for example `v0.1.1`).
+## Before you publish
+
+1. Bump `version` in `Cargo.toml` and merge to `main`.
+2. Create and **push the tag to `origin`** (preflight requires the tag on the remote):
+   `git tag -a v0.1.6 -m "Release v0.1.6" && git push origin v0.1.6`
+3. Either wait for the workflow triggered by the tag push, or run **Actions → release → Run workflow** with the same tag (only after step 2).
+
+Run the checklist below after the release job finishes (for example for `v0.1.6`).
 
 - [ ] Release page has all expected assets:
   - `boson-x86_64-apple-darwin.tar.gz` (+ `.sha256`, if build succeeded)
