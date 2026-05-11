@@ -3,14 +3,12 @@
 //!
 //! ```text
 //! user-repo/
-//! ├── boson.yml              # manifest (source of truth, committed)
-//! ├── boson/                 # YAML files matched by manifest.includes
+//! ├── boson.yml                # commit
+//! ├── LLM.md                   # optional, commit if useful
+//! ├── boson/
 //! │   ├── environments.yml
 //! │   └── requests.yml
-//! ├── LLM.md                 # optional: hints for humans / coding agents (committed)
-//! └── .boson/                # local-only runtime state (gitignored)
-//!     ├── state.db           # SQLite cache, drafts, history, secrets
-//!     └── key.bin            # 32-byte secret-key for encrypting secrets
+//! └── .boson/                  # gitignored: local DB + key (not “collection” YAML)
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -100,14 +98,16 @@ fn write_llm_md(paths: &ProjectPaths, project_name: &str) -> anyhow::Result<()> 
 
 This directory is a **Boson** HTTP client project: request collections and environments live in **YAML** on disk; the `boson` CLI serves a local UI and runs requests.
 
-## Layout
+## What to edit (commit these)
 
 | Path | Role |
 |------|------|
 | `boson.yml` | Manifest: `name`, `schema_version`, `includes` (glob patterns for more YAML) |
+| `LLM.md` | Optional notes for humans / coding agents (this file) |
 | `boson/environments.yml` | Environment ids, base URLs, `variables` maps |
 | `boson/requests.yml` (or `boson/requests/**/*.yml`) | HTTP requests: `id`, `method`, `url`, `headers`, `query`, `auth`, `body`, `options` |
-| `.boson/` | **Local only** — SQLite (`state.db`), encryption key (`key.bin`). **Do not commit.** |
+
+**Local only (gitignored):** `.boson/` holds SQLite + an encryption key for drafts, history, and **encrypted** secrets — not part of your YAML “collection”. Do not commit.
 
 ## Editing rules
 

@@ -112,19 +112,24 @@ Commit YAML files, do not commit `.boson/`.
 
 ## Project Format
 
-### Expected layout
+### What lives on disk
+
+**You edit and commit** — your API collection:
 
 ```text
 my-api/
-├── boson.yml
-├── LLM.md                    # optional: hints for you / coding agents (commit if useful)
-├── boson/
-│   ├── environments.yml
-│   └── requests.yml
-└── .boson/
-    ├── state.db
-    └── key.bin
+├── boson.yml              # manifest (name, includes, schema)
+├── LLM.md                 # optional hints for you / coding agents
+└── boson/
+    ├── environments.yml   # envs + variables
+    └── requests.yml       # requests (split across more files if you like)
 ```
+
+**Boson keeps locally** (gitignored — not part of your “collection”):
+
+- `.boson/` — SQLite + encryption key for drafts, history, and encrypted secrets. You normally never open these files by hand.
+
+**Naming tip:** run `boson init my-api` so the project root is `my-api/`. Avoid `my-api/boson/` as the root, or every path starts with `boson/...` twice in conversation.
 
 ### YAML notes
 

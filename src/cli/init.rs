@@ -12,11 +12,21 @@ pub(super) fn init(args: InitArgs) -> anyhow::Result<()> {
     let store = Store::open(&paths.db_path)?;
     store.replace_snapshot(&snapshot)?;
     SecretManager::new(store, &paths.secret_key_path)?;
-    println!("initialized Boson project at {}", paths.root.display());
-    println!("created {}", paths.root.join("LLM.md").display());
-    println!("created {}", paths.manifest.display());
-    println!("created {}", paths.db_path.display());
-    println!("created {}", paths.secret_key_path.display());
+    let root = paths.root.display();
+    println!("initialized Boson project at {root}");
+    println!();
+    println!("Your collection (commit these):");
+    for label in [
+        paths.root.join("LLM.md"),
+        paths.manifest.clone(),
+        paths.boson_dir.join("environments.yml"),
+        paths.boson_dir.join("requests.yml"),
+    ] {
+        println!("  {}", rel_under_root(&paths.root, &label));
+    }
+    println!();
+    println!("Local workspace (gitignored — drafts, history, encrypted secrets):");
+    println!("  .boson/");
     println!();
     println!("next steps:");
     println!("  cd {}", paths.root.display());
@@ -33,5 +43,16 @@ pub(super) fn init(args: InitArgs) -> anyhow::Result<()> {
     println!();
     println!("example project flow (from a Boson git checkout):");
     println!("  just dev-example");
+    println!();
+    println!("tip: prefer `boson init my-api` so the project root is `my-api/` — avoid `my-api/boson/`");
+    println!("      or you get paths like `boson/environments.yml` nested under a folder named `boson`.");
     Ok(())
+}
+
+fn rel_under_root(root: &std::path::Path, path: &std::path::Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+        .replace('\\', "/")
 }
