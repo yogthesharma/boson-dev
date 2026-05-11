@@ -100,7 +100,7 @@ main() {
   msg ""
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT INT TERM
+  trap 'rm -rf "${tmp:-}"' EXIT INT TERM
 
   tarball="${tmp}/${asset}"
   curl --fail --location --progress-bar --output "$tarball" "$url" \
