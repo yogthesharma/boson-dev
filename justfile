@@ -50,6 +50,13 @@ build-release:
 dev project_dir="example-api":
     cargo run --no-default-features -- dev --project-dir {{project_dir}}
 
+# Run the full local demo stack: example Fastify API + Rust + web (Vite via `boson dev`).
+dev-example:
+    (cd example/server && pnpm install --frozen-lockfile && pnpm dev) &
+    api_pid=$!
+    trap 'kill $api_pid 2>/dev/null || true' EXIT INT TERM
+    cargo run --no-default-features -- dev --project-dir example --no-open
+
 # Initialise a fresh demo project under example-api/.
 demo:
     cargo run --no-default-features -- init example-api --name Example --force

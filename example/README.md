@@ -17,6 +17,25 @@ example/
 
 ## 1. Start the example API
 
+Quick start (repo root, one command):
+
+```bash
+just dev-example
+```
+
+This starts the Fastify example API and then runs `boson dev --project-dir example`
+(which also starts Vite for the web UI with HMR).
+
+If you prefer Cargo aliases for the Rust/web side:
+
+```bash
+cargo dev-example
+```
+
+Then start the Fastify example API separately in another terminal:
+
+Manual mode:
+
 ```bash
 cd example/server
 pnpm install            # only needed the first time

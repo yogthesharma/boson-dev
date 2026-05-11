@@ -1,0 +1,3 @@
+[alias]
+# Run Boson dev mode against the checked-in `example/` project.
+dev-example = "run --no-default-features -- dev --project-dir example --no-open"
